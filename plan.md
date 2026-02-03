@@ -199,9 +199,10 @@
 
 **Goal:** Make it production-ready for local use.
 
-### [ ] 5.1. Performance Tuning
-
-- [ ] Implement LRU Cache in backend for frequent queries.
+### [ ] 5.1. Performance Tuning & Caching
+- [ ] Implement a per-user caching layer (API responses & DB query results).
+- [ ] Cache AI-generated responses to reduce redundant LLM calls.
+- [ ] Implement a robust LRU cache for vector search results.
 - [ ] Ensure `nomic-embed-text` is used (much faster than Llama3 for embedding).
 
 ### [ ] 5.2. UI UX Polish

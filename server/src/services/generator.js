@@ -1,6 +1,8 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { Ollama } from '@langchain/ollama';
 import { validateQuiz, validateFlashcardDeck, validateSyllabus } from './schemas.js';
+import cache from './cache.js';
+import crypto from 'crypto';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -33,7 +35,7 @@ function getAIProvider() {
 
 function initializeProviders() {
   if (initialized) return;
-  
+
   const AI_PROVIDER = getAIProvider();
   const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
   const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
@@ -50,16 +52,16 @@ function initializeProviders() {
       throw new Error('GEMINI_API_KEY not found in environment variables');
     }
     const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-    geminiModel = genAI.getGenerativeModel({ 
+    geminiModel = genAI.getGenerativeModel({
       model: 'gemini-2.5-flash',
       generationConfig: {
-      temperature: 0.7,
-      maxOutputTokens: 2048,
-    },
-  });
+        temperature: 0.7,
+        maxOutputTokens: 2048,
+      },
+    });
     console.log('🤖 Using Gemini 2.5 Flash for generation');
   }
-  
+
   initialized = true;
 }
 
@@ -69,15 +71,28 @@ function initializeProviders() {
  * @returns {Promise<string>} - The AI response
  */
 async function generateText(prompt) {
+  const hash = crypto.createHash('md5').update(prompt).digest('hex');
+  const cacheKey = `ai_gen_${hash}`;
+
+  const cached = cache.get(cacheKey);
+  if (cached) {
+    console.log('⚡ Using cached AI response');
+    return cached;
+  }
+
   initializeProviders();
   const AI_PROVIDER = getAIProvider();
-  
+
+  let response;
   if (AI_PROVIDER === 'gemini') {
     const result = await geminiModel.generateContent(prompt);
-    return result.response.text();
+    response = result.response.text();
   } else {
-    return await ollamaLLM.invoke(prompt);
+    response = await ollamaLLM.invoke(prompt);
   }
+
+  cache.set(cacheKey, response, 7200); // 2 hours
+  return response;
 }
 
 /**
@@ -89,28 +104,28 @@ async function generateText(prompt) {
 async function generateTextStream(prompt, onChunk) {
   initializeProviders();
   const AI_PROVIDER = getAIProvider();
-  
+
   if (AI_PROVIDER === 'gemini') {
     const result = await geminiModel.generateContentStream(prompt);
     let fullText = '';
-    
+
     for await (const chunk of result.stream) {
       const chunkText = chunk.text();
       fullText += chunkText;
       if (onChunk) onChunk(chunkText);
     }
-    
+
     return fullText;
   } else {
     // Ollama streaming
     const stream = await ollamaLLM.stream(prompt);
     let fullText = '';
-    
+
     for await (const chunk of stream) {
       fullText += chunk;
       if (onChunk) onChunk(chunk);
     }
-    
+
     return fullText;
   }
 }
@@ -120,7 +135,7 @@ async function generateTextStream(prompt, onChunk) {
  */
 function extractJSON(response) {
   let jsonStr = response.trim();
-  
+
   // Remove markdown code blocks
   if (jsonStr.includes('```json')) {
     const start = jsonStr.indexOf('```json') + 7;
@@ -131,7 +146,7 @@ function extractJSON(response) {
     const end = jsonStr.lastIndexOf('```');
     jsonStr = jsonStr.slice(start, end).trim();
   }
-  
+
   // Try to find JSON object in the response
   const jsonStart = jsonStr.indexOf('{');
   const jsonEnd = jsonStr.lastIndexOf('}');
@@ -223,7 +238,7 @@ CRITICAL RULES:
       console.error('JSON parsing failed. Raw response:', jsonStr.substring(0, 200));
       throw new Error(`Invalid JSON from AI: ${parseError.message}`);
     }
-    
+
     const validated = validateSyllabus(parsed);
     console.log('✅ Syllabus generated successfully');
     return validated;
@@ -375,7 +390,7 @@ RULES:
 
     const response = await generateText(prompt);
     const jsonStr = extractJSON(response);
-    
+
     let parsed;
     try {
       parsed = JSON.parse(jsonStr);
@@ -383,7 +398,7 @@ RULES:
       console.error('JSON parsing failed for syllabus');
       throw new Error(`Invalid JSON from AI: ${parseError.message}`);
     }
-    
+
     // Ensure topics have IDs
     if (parsed.topics) {
       parsed.topics = parsed.topics.map((topic, index) => ({
@@ -554,7 +569,7 @@ Return ONLY valid JSON`;
  */
 export function analyzeWeakTopics(quizHistory, topics) {
   const topicScores = {};
-  
+
   // Aggregate scores by topic
   for (const quiz of quizHistory) {
     const topic = quiz.topic || 'general';
@@ -565,13 +580,13 @@ export function analyzeWeakTopics(quizHistory, topics) {
     topicScores[topic].total += quiz.total || 0;
     topicScores[topic].attempts += 1;
   }
-  
+
   // Calculate percentages and identify weak areas
   const analysis = [];
   for (const [topic, data] of Object.entries(topicScores)) {
     const percentage = data.total > 0 ? Math.round((data.correct / data.total) * 100) : 0;
     const topicInfo = topics?.find(t => t.title === topic || t.id === topic);
-    
+
     analysis.push({
       topic,
       topicId: topicInfo?.id,
@@ -580,24 +595,24 @@ export function analyzeWeakTopics(quizHistory, topics) {
       correct: data.correct,
       total: data.total,
       status: percentage >= 80 ? 'strong' : percentage >= 60 ? 'moderate' : 'weak',
-      recommendation: percentage < 60 
+      recommendation: percentage < 60
         ? 'Needs more practice - review fundamentals'
-        : percentage < 80 
-        ? 'Good progress - focus on edge cases'
-        : 'Well understood - maintain with occasional review',
+        : percentage < 80
+          ? 'Good progress - focus on edge cases'
+          : 'Well understood - maintain with occasional review',
       priority: percentage < 60 ? 'high' : percentage < 80 ? 'medium' : 'low'
     });
   }
-  
+
   // Sort by percentage (weakest first)
   analysis.sort((a, b) => a.percentage - b.percentage);
-  
+
   return {
     weakTopics: analysis.filter(a => a.status === 'weak'),
     moderateTopics: analysis.filter(a => a.status === 'moderate'),
     strongTopics: analysis.filter(a => a.status === 'strong'),
     allTopics: analysis,
-    overallScore: analysis.length > 0 
+    overallScore: analysis.length > 0
       ? Math.round(analysis.reduce((sum, a) => sum + a.percentage, 0) / analysis.length)
       : 0,
     recommendations: analysis.filter(a => a.status === 'weak').map(a => ({
@@ -620,13 +635,13 @@ export async function generateStudyPlan(topics, examDate, dailyHours, weakTopics
     const prompt = `Create a study plan for an upcoming exam.
 
 Topics to cover:
-${JSON.stringify(topics.map(t => ({ 
-  title: t.title, 
-  difficulty: t.difficulty, 
-  importance: t.importance,
-  studyTime: t.studyTime,
-  examWeight: t.examWeight
-})), null, 2)}
+${JSON.stringify(topics.map(t => ({
+      title: t.title,
+      difficulty: t.difficulty,
+      importance: t.importance,
+      studyTime: t.studyTime,
+      examWeight: t.examWeight
+    })), null, 2)}
 
 Weak topics that need extra attention:
 ${weakTopics.map(w => w.topic).join(', ') || 'None identified yet'}
