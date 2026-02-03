@@ -3,6 +3,7 @@ import { sql } from 'drizzle-orm';
 import postgres from 'postgres';
 import * as schema from '../db/schema.js';
 import { getBatchEmbeddings } from './ai.js';
+import cache from './cache.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -77,6 +78,13 @@ export async function saveDocument(name, content) {
 export async function searchContext(queryEmbedding, docId, limit = 5) {
     try {
         const queryVector = JSON.stringify(queryEmbedding);
+        const cacheKey = `search_${docId}_${queryVector}_${limit}`;
+
+        const cachedResults = cache.get(cacheKey);
+        if (cachedResults) {
+            console.log(`⚡ Search cache hit for doc: ${docId}`);
+            return cachedResults;
+        }
 
         // Find chunks sorted by cosine similarity
         // Operator <=> is cosine distance, so smaller is more similar.
@@ -89,7 +97,10 @@ export async function searchContext(queryEmbedding, docId, limit = 5) {
             .orderBy(sql`${schema.embeddings.embedding} <=> ${queryVector}`)
             .limit(limit);
 
-        return results.map(r => r.content);
+        const contents = results.map(r => r.content);
+        cache.set(cacheKey, contents, 1800); // Cache search for 30 mins
+
+        return contents;
     } catch (error) {
         console.error('Error searching context:', error);
         throw new Error('Failed to search knowledge base');

@@ -1,8 +1,8 @@
 import express from 'express';
-import { 
-  generateSyllabus, 
-  generateQuiz, 
-  generateFlashcards, 
+import {
+  generateSyllabus,
+  generateQuiz,
+  generateFlashcards,
   generateSyllabusStream,
   generateSyllabusFromPDF,
   generateExamRevision,
@@ -12,6 +12,7 @@ import {
   getSettings,
   updateSettings
 } from '../services/generator.js';
+import { cacheMiddleware } from '../services/cache.js';
 
 const router = express.Router();
 
@@ -29,7 +30,7 @@ router.post('/settings', (req, res) => {
 });
 
 // POST /api/generate/syllabus - Generate syllabus from document
-router.post('/syllabus', async (req, res, next) => {
+router.post('/syllabus', cacheMiddleware(3600), async (req, res, next) => {
   try {
     const { content, stream = false } = req.body;
 
@@ -85,7 +86,7 @@ router.post('/syllabus-from-pdf', async (req, res, next) => {
 });
 
 // POST /api/generate/quiz - Generate quiz from document
-router.post('/quiz', async (req, res, next) => {
+router.post('/quiz', cacheMiddleware(3600), async (req, res, next) => {
   try {
     const { content, topic, difficulty = 'medium', questionCount = 5 } = req.body;
 
@@ -128,7 +129,7 @@ router.post('/rapid-quiz', async (req, res, next) => {
 });
 
 // POST /api/generate/flashcards - Generate flashcards from document
-router.post('/flashcards', async (req, res, next) => {
+router.post('/flashcards', cacheMiddleware(3600), async (req, res, next) => {
   try {
     const { content, cardCount = 10 } = req.body;
 
