@@ -27,42 +27,59 @@ export async function generateSyllabus(content) {
 Content:
 ${content}
 
-Generate a JSON object with the following structure:
+Generate ONLY a valid JSON object with this exact structure (no extra text):
 {
-  "title": "Course/Document Title",
+  "title": "Course Title",
   "chapters": [
     {
-      "title": "Chapter Title",
+      "title": "Chapter 1 Name",
       "topics": [
         {
-          "title": "Topic Title",
-          "subtopics": [
-            { "title": "Subtopic Title" }
-          ]
+          "title": "Topic Name"
         }
       ]
     }
   ]
 }
 
-IMPORTANT:
-- Return ONLY valid JSON, no other text
-- Extract the main themes as chapters
-- Break down each chapter into topics
-- Include subtopics where appropriate
-- Be comprehensive but concise`;
+CRITICAL RULES:
+- Return ONLY the JSON object, no explanation or extra text
+- Use double quotes for all strings
+- Keep titles concise (under 50 characters)
+- Extract 3-5 main chapters from the content
+- Each chapter should have 2-4 topics`;
 
     const response = await llm.invoke(prompt);
     
-    // Extract JSON from response (handle markdown code blocks)
+    // Extract JSON from response
     let jsonStr = response.trim();
-    if (jsonStr.startsWith('```json')) {
-      jsonStr = jsonStr.slice(7, -3).trim();
-    } else if (jsonStr.startsWith('```')) {
-      jsonStr = jsonStr.slice(3, -3).trim();
+    
+    // Remove markdown code blocks
+    if (jsonStr.includes('```json')) {
+      const start = jsonStr.indexOf('```json') + 7;
+      const end = jsonStr.lastIndexOf('```');
+      jsonStr = jsonStr.slice(start, end).trim();
+    } else if (jsonStr.includes('```')) {
+      const start = jsonStr.indexOf('```') + 3;
+      const end = jsonStr.lastIndexOf('```');
+      jsonStr = jsonStr.slice(start, end).trim();
+    }
+    
+    // Try to find JSON object in the response
+    const jsonStart = jsonStr.indexOf('{');
+    const jsonEnd = jsonStr.lastIndexOf('}');
+    if (jsonStart !== -1 && jsonEnd !== -1) {
+      jsonStr = jsonStr.slice(jsonStart, jsonEnd + 1);
     }
 
-    const parsed = JSON.parse(jsonStr);
+    let parsed;
+    try {
+      parsed = JSON.parse(jsonStr);
+    } catch (parseError) {
+      console.error('JSON parsing failed. Raw response:', jsonStr.substring(0, 200));
+      throw new Error(`Invalid JSON from AI: ${parseError.message}`);
+    }
+    
     const validated = validateSyllabus(parsed);
 
     console.log('✅ Syllabus generated successfully');
@@ -118,10 +135,23 @@ IMPORTANT:
     
     // Extract JSON from response
     let jsonStr = response.trim();
-    if (jsonStr.startsWith('```json')) {
-      jsonStr = jsonStr.slice(7, -3).trim();
-    } else if (jsonStr.startsWith('```')) {
-      jsonStr = jsonStr.slice(3, -3).trim();
+    
+    // Remove markdown code blocks
+    if (jsonStr.includes('```json')) {
+      const start = jsonStr.indexOf('```json') + 7;
+      const end = jsonStr.lastIndexOf('```');
+      jsonStr = jsonStr.slice(start, end).trim();
+    } else if (jsonStr.includes('```')) {
+      const start = jsonStr.indexOf('```') + 3;
+      const end = jsonStr.lastIndexOf('```');
+      jsonStr = jsonStr.slice(start, end).trim();
+    }
+    
+    // Try to find JSON object in the response
+    const jsonStart = jsonStr.indexOf('{');
+    const jsonEnd = jsonStr.lastIndexOf('}');
+    if (jsonStart !== -1 && jsonEnd !== -1) {
+      jsonStr = jsonStr.slice(jsonStart, jsonEnd + 1);
     }
 
     const parsed = JSON.parse(jsonStr);
@@ -174,10 +204,23 @@ IMPORTANT:
     
     // Extract JSON from response
     let jsonStr = response.trim();
-    if (jsonStr.startsWith('```json')) {
-      jsonStr = jsonStr.slice(7, -3).trim();
-    } else if (jsonStr.startsWith('```')) {
-      jsonStr = jsonStr.slice(3, -3).trim();
+    
+    // Remove markdown code blocks
+    if (jsonStr.includes('```json')) {
+      const start = jsonStr.indexOf('```json') + 7;
+      const end = jsonStr.lastIndexOf('```');
+      jsonStr = jsonStr.slice(start, end).trim();
+    } else if (jsonStr.includes('```')) {
+      const start = jsonStr.indexOf('```') + 3;
+      const end = jsonStr.lastIndexOf('```');
+      jsonStr = jsonStr.slice(start, end).trim();
+    }
+    
+    // Try to find JSON object in the response
+    const jsonStart = jsonStr.indexOf('{');
+    const jsonEnd = jsonStr.lastIndexOf('}');
+    if (jsonStart !== -1 && jsonEnd !== -1) {
+      jsonStr = jsonStr.slice(jsonStart, jsonEnd + 1);
     }
 
     const parsed = JSON.parse(jsonStr);
