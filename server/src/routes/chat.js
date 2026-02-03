@@ -1,15 +1,9 @@
 import express from 'express';
+import { handleChat } from '../controllers/chat.js';
 
 const router = express.Router();
 
-// POST /api/chat - Chat with document
-router.post('/', async (req, res, next) => {
-  try {
-    // TODO: Implement chat logic (Harsh's task)
-    res.json({ message: 'Chat endpoint - to be implemented' });
-  } catch (error) {
-    next(error);
-  }
-});
+// POST /api/chat - Chat with document (RAG)
+router.post('/', handleChat);
 
 export default router;

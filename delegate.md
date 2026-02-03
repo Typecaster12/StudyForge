@@ -9,50 +9,50 @@
 ## 🔴 Ameer (Lead Backend Developer)
 
 ### Phase 1.1: Server Scaffold
-- [ ] Create `server/src/index.js` with Express setup
-- [ ] Configure CORS, dotenv, express.json()
-- [ ] Add Global Error Handler middleware
-- [ ] Add Rate Limiting middleware (express-rate-limit)
-- [ ] Create router structure: `/api/upload`, `/api/chat`, `/api/generate`
+- [x] Create `server/src/index.js` with Express setup
+- [x] Configure CORS, dotenv, express.json()
+- [x] Add Global Error Handler middleware
+- [x] Add Rate Limiting middleware (express-rate-limit)
+- [x] Create router structure: `/api/upload`, `/api/chat`, `/api/generate`
 
 ### Phase 1.3: Vector Service (AI Integration)
-- [ ] Create `server/src/services/ai.js`
-- [ ] Implement `getEmbeddings(text)` using @langchain/ollama
-- [ ] Configure nomic-embed-text model
-- [ ] Implement batch embedding generation for chunks
-- [ ] Add error handling for Ollama connection failures
+- [x] Create `server/src/services/ai.js`
+- [x] Implement `getEmbeddings(text)` using @langchain/ollama
+- [x] Configure nomic-embed-text model
+- [x] Implement batch embedding generation for chunks
+- [x] Add error handling for Ollama connection failures
 
 ### Phase 4: Advanced Study Features (Backend)
-- [ ] `POST /api/generate/syllabus` - Analyze PDF → JSON chapters/topics
-- [ ] `POST /api/generate/quiz` - Generate quiz with Zod validation
-- [ ] `POST /api/generate/flashcards` - Extract terms & definitions
-- [ ] Implement Zod schemas for strict JSON validation
-- [ ] Add progress tracking endpoints (save scores, retrieve stats)
+- [x] `POST /api/generate/syllabus` - Analyze PDF → JSON chapters/topics
+- [x] `POST /api/generate/quiz` - Generate quiz with Zod validation
+- [x] `POST /api/generate/flashcards` - Extract terms & definitions
+- [x] Implement Zod schemas for strict JSON validation
+- [x] Add progress tracking endpoints (save scores, retrieve stats)
 
 ---
 
 ## 🔵 Harsh (Lead Backend Developer)
 
 ### Phase 0.5: Database Schema (Drizzle ORM)
-- [ ] Create `server/drizzle.config.ts`
-- [ ] Create `server/src/db/schema.js`
-- [ ] Define all tables (documents, embeddings, generated_content, study_progress)
-- [ ] Push schema to Supabase: `bun run drizzle-kit push`
-- [ ] Test database connection
+- [x] Create `server/drizzle.config.ts`
+- [x] Create `server/src/db/schema.js`
+- [x] Define all tables (documents, embeddings, generated_content, study_progress)
+- [x] Push schema to Neon: `bun run drizzle-kit push`
+- [x] Test database connection
 
 ### Phase 1: Knowledge Engine (PDF Ingestion)
-- [ ] Create `server/src/services/parser.js` - PDF parsing logic
-- [ ] Implement `cleanText()` utility to remove headers/footers
-- [ ] Create `server/src/services/storage.js` - Database operations
-- [ ] Implement `saveDocument()` with chunking (1000 chars, 200 overlap)
-- [ ] Create API endpoint: `POST /api/upload` with Multer
+- [x] Create `server/src/services/parser.js` - PDF parsing logic
+- [x] Implement `cleanText()` utility to remove headers/footers
+- [x] Create `server/src/services/storage.js` - Database operations
+- [x] Implement `saveDocument()` with chunking (1000 chars, 200 overlap)
+- [x] Create API endpoint: `POST /api/upload` with Multer
 
 ### Phase 2: RAG & Chat System
-- [ ] Implement `searchContext(query, docId)` with vector similarity
-- [ ] Create `server/src/controllers/chat.js`
-- [ ] Build RAG prompt: "Answer using ONLY this context..."
-- [ ] Integrate Ollama LLM (llama3) for chat responses
-- [ ] Implement streaming response with `res.write()`
+- [x] Implement `searchContext(query, docId)` with vector similarity
+- [x] Create `server/src/controllers/chat.js`
+- [x] Build RAG prompt: "Answer using ONLY this context..."
+- [x] Integrate Ollama LLM (llama3) for chat responses
+- [x] Implement streaming response with `res.write()`
 
 ---
 

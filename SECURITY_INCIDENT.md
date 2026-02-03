@@ -8,7 +8,7 @@ A Google Gemini API key was accidentally committed to this repository and is now
 
 1. **Revoke the exposed API key:**
    - Go to: https://console.cloud.google.com/apis/credentials
-   - Find the key: `AIzaSyBk4Slqp-oUdNAbSUcZSpVI8pomVw7FqVg`
+   - Find the key: `[REDACTED]`
    - Delete it immediately
 
 2. **Generate a new API key:**

@@ -3,47 +3,42 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
+const OLLAMA_URL = process.env.OLLAMA_URL || process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
 
-// Initialize Ollama embeddings with nomic-embed-text model
 const embeddings = new OllamaEmbeddings({
   model: 'nomic-embed-text',
-  baseUrl: OLLAMA_BASE_URL,
+  baseUrl: OLLAMA_URL,
 });
 
 /**
- * Generate embeddings for a single text string
- * @param {string} text - The text to generate embeddings for
- * @returns {Promise<number[]>} - Array of embedding values (768 dimensions)
+ * Generates embeddings for a single string of text.
+ * @param {string} text 
+ * @returns {Promise<number[]>}
  */
-export async function getEmbedding(text) {
+export async function getEmbeddings(text) {
   try {
     if (!text || text.trim().length === 0) {
       throw new Error('Text cannot be empty');
     }
-
-    const embedding = await embeddings.embedQuery(text);
-    return embedding;
+    return await embeddings.embedQuery(text);
   } catch (error) {
-    console.error('Error generating embedding:', error.message);
-    throw new Error(`Failed to generate embedding: ${error.message}`);
+    console.error('Error generating embeddings:', error.message);
+    throw new Error(`Failed to generate AI embeddings: ${error.message}`);
   }
 }
 
 /**
- * Generate embeddings for multiple text chunks in parallel
- * @param {string[]} texts - Array of text chunks to embed
- * @returns {Promise<number[][]>} - Array of embedding arrays
+ * Generates embeddings for multiple chunks of text in batch.
+ * @param {string[]} texts 
+ * @returns {Promise<number[][]>}
  */
-export async function getEmbeddings(texts) {
+export async function getBatchEmbeddings(texts) {
   try {
     if (!Array.isArray(texts) || texts.length === 0) {
       throw new Error('Texts must be a non-empty array');
     }
 
-    // Filter out empty texts
     const validTexts = texts.filter(t => t && t.trim().length > 0);
-    
     if (validTexts.length === 0) {
       throw new Error('No valid texts to embed');
     }
@@ -51,69 +46,30 @@ export async function getEmbeddings(texts) {
     console.log(`📊 Generating embeddings for ${validTexts.length} chunks...`);
     const startTime = Date.now();
 
-    // Generate embeddings in parallel
-    const embeddingsArray = await embeddings.embedDocuments(validTexts);
+    const results = await embeddings.embedDocuments(validTexts);
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-    console.log(`✅ Generated ${embeddingsArray.length} embeddings in ${duration}s`);
+    console.log(`✅ Generated ${results.length} embeddings in ${duration}s`);
 
-    return embeddingsArray;
+    return results;
   } catch (error) {
-    console.error('Error generating embeddings:', error.message);
-    throw new Error(`Failed to generate embeddings: ${error.message}`);
+    console.error('Error generating batch embeddings:', error.message);
+    throw new Error(`Failed to generate batch AI embeddings: ${error.message}`);
   }
-}
-
-/**
- * Split text into chunks for embedding
- * @param {string} text - The text to chunk
- * @param {number} chunkSize - Size of each chunk (default: 1000)
- * @param {number} overlap - Overlap between chunks (default: 200)
- * @returns {string[]} - Array of text chunks
- */
-export function chunkText(text, chunkSize = 1000, overlap = 200) {
-  if (!text || text.trim().length === 0) {
-    return [];
-  }
-
-  const chunks = [];
-  let startIndex = 0;
-
-  while (startIndex < text.length) {
-    const endIndex = Math.min(startIndex + chunkSize, text.length);
-    const chunk = text.slice(startIndex, endIndex).trim();
-    
-    if (chunk.length > 0) {
-      chunks.push(chunk);
-    }
-
-    // Move forward by chunkSize minus overlap
-    startIndex += chunkSize - overlap;
-
-    // Break if we're at the end
-    if (endIndex === text.length) {
-      break;
-    }
-  }
-
-  console.log(`📝 Split text into ${chunks.length} chunks (size: ${chunkSize}, overlap: ${overlap})`);
-  return chunks;
 }
 
 /**
  * Test Ollama connection
- * @returns {Promise<boolean>} - True if connection successful
+ * @returns {Promise<boolean>}
  */
 export async function testOllamaConnection() {
   try {
-    console.log(`🔌 Testing Ollama connection at ${OLLAMA_BASE_URL}...`);
-    const testEmbedding = await getEmbedding('test');
+    console.log(`🔌 Testing Ollama connection at ${OLLAMA_URL}...`);
+    const testEmbedding = await getEmbeddings('test');
     console.log(`✅ Ollama connection successful! (Embedding dimension: ${testEmbedding.length})`);
     return true;
   } catch (error) {
     console.error(`❌ Ollama connection failed: ${error.message}`);
-    console.error('💡 Make sure Ollama is running and nomic-embed-text model is pulled');
-    console.error('   Run: ollama pull nomic-embed-text');
     return false;
   }
 }
