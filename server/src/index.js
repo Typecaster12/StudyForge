@@ -41,6 +41,9 @@ import chatRoutes from './routes/chat.js';
 import generateRoutes from './routes/generate.js';
 import progressRoutes from './routes/progress.js';
 import teacherRoutes from './routes/teacher.js';
+import subjectsRoutes from './routes/subjects.js';
+import quizzesRoutes from './routes/quizzes.js';
+import flashcardsRoutes from './routes/flashcards.js';
 
 app.use('/api/auth', authRoutes);
 app.use('/api/upload', uploadRoutes);
@@ -48,6 +51,9 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/generate', generateRoutes);
 app.use('/api/progress', progressRoutes);
 app.use('/api/teacher', teacherRoutes);
+app.use('/api/subjects', subjectsRoutes);
+app.use('/api/quizzes', quizzesRoutes);
+app.use('/api/flashcards', flashcardsRoutes);
 
 // Global error handler
 app.use((err, req, res, next) => {

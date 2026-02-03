@@ -438,13 +438,8 @@ RULES:
       console.error('JSON parsing failed. Raw response:', response.substring(0, 500));
       throw new Error(`Invalid JSON from AI: ${parseError.message}`);
     }
-<<<<<<< HEAD
-
-    // Ensure topics have IDs
-=======
     
     // Ensure topics have IDs and week numbers
->>>>>>> bc44d3e (feat: Add Groq AI integration, YouTube suggestions, Settings page, and bug fixes)
     if (parsed.topics) {
       parsed.topics = parsed.topics.map((topic, index) => ({
         ...topic,

@@ -1,55 +1,11 @@
 import express from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import fs from 'fs/promises';
-import path from 'path';
+import { eq } from 'drizzle-orm';
+import { db } from '../services/storage.js';
+import * as schema from '../db/schema.js';
 
 const router = express.Router();
-
-// File path for persistent user storage
-const USERS_FILE = path.join(process.cwd(), 'data', 'users.json');
-
-// In-memory user store (synced with file)
-const users = new Map();
-
-// Load users from file on startup
-async function loadUsers() {
-  try {
-    // Ensure data directory exists
-    await fs.mkdir(path.dirname(USERS_FILE), { recursive: true });
-    
-    // Try to read existing users file
-    const data = await fs.readFile(USERS_FILE, 'utf-8');
-    const usersArray = JSON.parse(data);
-    
-    // Populate Map
-    usersArray.forEach(user => {
-      users.set(user.email, user);
-    });
-    
-    console.log(`✅ Loaded ${users.size} users from storage`);
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      console.log('📝 No existing users file, starting fresh');
-    } else {
-      console.error('⚠️ Error loading users:', error.message);
-    }
-  }
-}
-
-// Save users to file
-async function saveUsers() {
-  try {
-    const usersArray = Array.from(users.values());
-    await fs.writeFile(USERS_FILE, JSON.stringify(usersArray, null, 2));
-    console.log(`💾 Saved ${users.size} users to storage`);
-  } catch (error) {
-    console.error('⚠️ Error saving users:', error.message);
-  }
-}
-
-// Initialize users on module load
-loadUsers();
 
 // Teacher access code (store in .env in production)
 const TEACHER_ACCESS_CODE = process.env.TEACHER_ACCESS_CODE || 'TEACH2024';
@@ -93,9 +49,15 @@ router.post('/signup', async (req, res, next) => {
       });
     }
 
-    // Check if user already exists (case-insensitive email)
+    // Check if user already exists in database
     const normalizedEmail = email.toLowerCase().trim();
-    if (users.has(normalizedEmail)) {
+    const existingUser = await db
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.email, normalizedEmail))
+      .limit(1);
+
+    if (existingUser.length > 0) {
       return res.status(400).json({
         error: { message: 'User with this email already exists' }
       });
@@ -104,28 +66,24 @@ router.post('/signup', async (req, res, next) => {
     // Hash password with salt rounds 10
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user
-    const user = {
-      id: crypto.randomUUID(),
-      email: normalizedEmail,
-      name: name.trim(),
-      password: hashedPassword,
-      role: 'student', // Default role
-      createdAt: new Date().toISOString(),
-      lastLogin: new Date().toISOString(),
-    };
-
-    users.set(normalizedEmail, user);
-
-    // Save to persistent storage
-    await saveUsers();
+    // Create user in database
+    const [newUser] = await db
+      .insert(schema.users)
+      .values({
+        email: normalizedEmail,
+        name: name.trim(),
+        password: hashedPassword,
+        role: 'student',
+        lastLogin: new Date(),
+      })
+      .returning();
 
     // Generate JWT with appropriate expiry
     const token = jwt.sign(
       { 
-        userId: user.id, 
-        email: user.email, 
-        role: user.role,
+        userId: newUser.id, 
+        email: newUser.email, 
+        role: newUser.role,
         iat: Math.floor(Date.now() / 1000)
       },
       JWT_SECRET,
@@ -148,11 +106,11 @@ router.post('/signup', async (req, res, next) => {
       message: 'Account created successfully',
       data: {
         user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-          createdAt: user.createdAt,
+          id: newUser.id,
+          email: newUser.email,
+          name: newUser.name,
+          role: newUser.role,
+          createdAt: newUser.createdAt,
         },
       },
     });
@@ -178,13 +136,15 @@ router.post('/login', async (req, res, next) => {
     // Normalize email for lookup
     const normalizedEmail = email.toLowerCase().trim();
 
-    // DEBUG: Log current users in memory
     console.log(`🔍 Login attempt for: ${normalizedEmail}`);
-    console.log(`📊 Total users in memory: ${users.size}`);
-    console.log(`👥 Registered emails:`, Array.from(users.keys()));
 
-    // Find user
-    const user = users.get(normalizedEmail);
+    // Find user in database
+    const [user] = await db
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.email, normalizedEmail))
+      .limit(1);
+
     if (!user) {
       console.log(`❌ User not found: ${normalizedEmail}`);
       return res.status(401).json({
@@ -199,12 +159,12 @@ router.post('/login', async (req, res, next) => {
         error: { message: 'Invalid email or password' }
       });
     }
-    
-    // Save updated user data
-    await saveUsers();
 
     // Update last login
-    user.lastLogin = new Date().toISOString();
+    await db
+      .update(schema.users)
+      .set({ lastLogin: new Date() })
+      .where(eq(schema.users.id, user.id));
 
     // Generate JWT
     const token = jwt.sign(
@@ -238,7 +198,7 @@ router.post('/login', async (req, res, next) => {
           email: user.email,
           name: user.name,
           role: user.role,
-          lastLogin: user.lastLogin,
+          lastLogin: new Date().toISOString(),
         },
       },
     });
@@ -259,7 +219,7 @@ router.post('/logout', (req, res) => {
 /**
  * GET /api/auth/me - Get current user
  */
-router.get('/me', (req, res) => {
+router.get('/me', async (req, res) => {
   const token = req.cookies?.auth_token;
 
   if (!token) {
@@ -278,7 +238,12 @@ router.get('/me', (req, res) => {
       });
     }
 
-    const user = users.get(decoded.email);
+    // Get user from database
+    const [user] = await db
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.id, decoded.userId))
+      .limit(1);
 
     if (!user) {
       return res.status(401).json({
@@ -335,7 +300,13 @@ router.post('/upgrade-to-teacher', async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, JWT_SECRET);
-    const user = users.get(decoded.email);
+
+    // Get user from database
+    const [user] = await db
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.id, decoded.userId))
+      .limit(1);
 
     if (!user) {
       return res.status(401).json({
@@ -356,16 +327,19 @@ router.post('/upgrade-to-teacher', async (req, res, next) => {
       });
     }
 
-    // Upgrade to teacher
-    user.role = 'teacher';
-    user.upgradedAt = new Date().toISOString();
-    
-    // Save updated user data
-    await saveUsers();
+    // Upgrade to teacher in database
+    const [updatedUser] = await db
+      .update(schema.users)
+      .set({ 
+        role: 'teacher',
+        upgradedAt: new Date()
+      })
+      .where(eq(schema.users.id, user.id))
+      .returning();
 
     // Generate new JWT with updated role
     const newToken = jwt.sign(
-      { userId: user.id, email: user.email, role: user.role },
+      { userId: updatedUser.id, email: updatedUser.email, role: updatedUser.role },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -377,17 +351,17 @@ router.post('/upgrade-to-teacher', async (req, res, next) => {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    console.log(`🎓 User upgraded to teacher: ${user.email}`);
+    console.log(`🎓 User upgraded to teacher: ${updatedUser.email}`);
 
     res.json({
       success: true,
       message: 'Successfully upgraded to teacher',
       data: {
         user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
+          id: updatedUser.id,
+          email: updatedUser.email,
+          name: updatedUser.name,
+          role: updatedUser.role,
         },
       },
     });
