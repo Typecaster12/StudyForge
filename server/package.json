@@ -1,0 +1,32 @@
+{
+  "name": "server",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/multer": "^2.0.0",
+    "@types/node": "^25.2.0",
+    "drizzle-kit": "^0.31.8"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@langchain/community": "^1.1.10",
+    "@langchain/core": "^1.1.18",
+    "@langchain/ollama": "^1.2.2",
+    "clsx": "^2.1.1",
+    "cors": "^2.8.6",
+    "dotenv": "^17.2.3",
+    "drizzle-orm": "^0.45.1",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.2.1",
+    "multer": "^2.0.2",
+    "pdf-parse": "^2.4.5",
+    "postgres": "^3.4.8",
+    "zod": "^4.3.6"
+  }
+}
