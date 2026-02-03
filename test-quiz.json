@@ -1,0 +1,5 @@
+{
+  "content": "React is a JavaScript library for building user interfaces. It uses a component-based architecture where you can create reusable UI components. React uses a virtual DOM to efficiently update the real DOM. JSX is a syntax extension that allows you to write HTML-like code in JavaScript. Components can have state and props. State is internal data that can change, while props are passed from parent components.",
+  "questionCount": 3,
+  "difficulty": "medium"
+}

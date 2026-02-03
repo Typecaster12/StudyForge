@@ -8,6 +8,7 @@
     "start": "bun src/index.js"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@langchain/community": "^1.1.10",
     "@langchain/core": "^1.1.18",
     "@langchain/ollama": "^1.2.2",
