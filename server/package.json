@@ -1,18 +1,11 @@
 {
   "name": "server",
-  "module": "index.ts",
+  "module": "index.js",
   "type": "module",
   "private": true,
-  "devDependencies": {
-    "@types/bun": "latest",
-    "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.6",
-    "@types/multer": "^2.0.0",
-    "@types/node": "^25.2.0",
-    "drizzle-kit": "^0.31.8"
-  },
-  "peerDependencies": {
-    "typescript": "^5"
+  "scripts": {
+    "dev": "bun --watch index.js",
+    "start": "bun index.js"
   },
   "dependencies": {
     "@langchain/community": "^1.1.10",
@@ -28,5 +21,8 @@
     "pdf-parse": "^2.4.5",
     "postgres": "^3.4.8",
     "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.8"
   }
 }
