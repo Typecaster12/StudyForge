@@ -6,9 +6,9 @@ dotenv.config();
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
 
-// Initialize Ollama LLM (llama3 for reasoning/generation)
+// Initialize Ollama LLM (qwen3:8b for reasoning/generation)
 const llm = new Ollama({
-  model: 'llama3',
+  model: 'qwen3:8b',
   baseUrl: OLLAMA_BASE_URL,
   temperature: 0.7,
 });
