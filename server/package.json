@@ -4,8 +4,8 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "bun --watch index.js",
-    "start": "bun index.js"
+    "dev": "bun --watch src/index.js",
+    "start": "bun src/index.js"
   },
   "dependencies": {
     "@langchain/community": "^1.1.10",
