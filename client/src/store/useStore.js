@@ -363,6 +363,32 @@ const useStore = create(
           console.error('Failed to save flashcards to database:', error);
         }
       },
+
+      fetchFlashcards: async () => {
+        try {
+          const result = await api.get('/flashcards/decks');
+          const decks = result.data || [];
+          
+          // Organize decks by subjectId
+          const flashcardsBySubject = {};
+          for (const deck of decks) {
+            if (deck.subjectId) {
+              // Fetch cards for this deck
+              const deckDetails = await api.get(`/flashcards/decks/${deck.id}`);
+              flashcardsBySubject[deck.subjectId] = {
+                title: deck.title,
+                cards: deckDetails.data.cards || [],
+                deckId: deck.id
+              };
+            }
+          }
+          
+          set({ flashcards: flashcardsBySubject });
+          console.log('✅ Fetched flashcards from database');
+        } catch (error) {
+          console.error('Failed to fetch flashcards:', error);
+        }
+      },
       
       setTopicContent: (subjectId, topicId, content) => set((state) => ({
         topicContent: { 

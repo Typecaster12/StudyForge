@@ -4,6 +4,7 @@ import { Sparkles, RefreshCw, ChevronLeft, ChevronRight, Check, X, RotateCcw, La
 import { cn } from '../lib/utils'
 import { generateFlashcards } from '../lib/api'
 import useStore from '../store/useStore'
+import api from '../lib/api'
 
 export default function FlashcardsTab({ document }) {
   const { flashcards, setFlashcards, flashcardProgress, updateFlashcardProgress } = useStore()
@@ -48,8 +49,23 @@ export default function FlashcardsTab({ document }) {
     }, 150)
   }
 
-  const handleMarkKnown = (known) => {
+  const handleMarkKnown = async (known) => {
     updateFlashcardProgress(document.id, currentCard, known)
+    
+    // Save to database if cards have IDs
+    const currentCardData = cards[currentCard]
+    if (currentCardData?.id) {
+      try {
+        await api.patch(`/flashcards/cards/${currentCardData.id}/review`, {
+          correct: known
+        })
+        console.log('✅ Flashcard review saved to database')
+      } catch (error) {
+        console.error('Failed to save flashcard review:', error)
+        // Continue anyway - local state is updated
+      }
+    }
+    
     if (studyMode) handleNext()
   }
 

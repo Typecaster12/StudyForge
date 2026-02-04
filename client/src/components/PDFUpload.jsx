@@ -3,7 +3,7 @@ import { useDropzone } from 'react-dropzone';
 import { Upload, FileText, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import useStore from '../store/useStore';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
 function PDFUpload({ onUploadComplete }) {
   const [uploading, setUploading] = useState(false);
@@ -25,7 +25,7 @@ function PDFUpload({ onUploadComplete }) {
       setProgress(30);
       setMessage('Uploading file...');
 
-      const response = await fetch(`${API_URL}/api/upload`, {
+      const response = await fetch(`${API_URL}/upload`, {
         method: 'POST',
         body: formData,
       });

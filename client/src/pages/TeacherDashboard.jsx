@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { 
   Users, TrendingUp, BookOpen, Award, AlertTriangle,
   Clock, Target, BarChart3, ChevronRight, Sparkles,
-  RefreshCw, Loader2
+  RefreshCw, Loader2, Plus, X
 } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
@@ -13,6 +13,14 @@ function TeacherDashboard() {
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'students' | 'analytics'
+  const [showCreateSubject, setShowCreateSubject] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [subjectForm, setSubjectForm] = useState({
+    name: '',
+    description: '',
+    color: '#3B82F6',
+    icon: '📚'
+  });
 
   useEffect(() => {
     fetchData();
@@ -22,8 +30,12 @@ function TeacherDashboard() {
     setLoading(true);
     try {
       const [studentsRes, analyticsRes] = await Promise.all([
-        fetch(`${API_URL}/teacher/students`),
-        fetch(`${API_URL}/teacher/analytics`),
+        fetch(`${API_URL}/teacher/students`, {
+          credentials: 'include',
+        }),
+        fetch(`${API_URL}/teacher/analytics`, {
+          credentials: 'include',
+        }),
       ]);
 
       if (studentsRes.ok) {
@@ -47,6 +59,48 @@ function TeacherDashboard() {
     if (score >= 60) return 'text-yellow-400 bg-yellow-900/30';
     return 'text-red-400 bg-red-900/30';
   };
+
+  const handleCreateSubject = async (e) => {
+    e.preventDefault();
+    setCreating(true);
+
+    try {
+      const response = await fetch(`${API_URL}/teacher/create-subject`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(subjectForm),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        alert(`✅ Subject "${subjectForm.name}" created for ${result.data.studentsCount} students!`);
+        setShowCreateSubject(false);
+        setSubjectForm({ name: '', description: '', color: '#3B82F6', icon: '📚' });
+        fetchData(); // Refresh data
+      } else {
+        alert(`❌ Error:() => setShowCreateSubject(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white transition-colors text-sm font-medium"
+            >
+              <Plus className="w-4 h-4" />
+              Create Subject for All
+            </button>
+            <button
+              onClick={ ${result.error?.message || 'Failed to create subject'}`);
+      }
+    } catch (error) {
+      console.error('Create subject error:', error);
+      alert('❌ Failed to create subject. Please try again.');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const iconOptions = ['📚', '🔬', '🎨', '💻', '🧮', '🌍', '⚗️', '🎭', '🏛️', '📊', '🎵', '⚽', '📖', '✍️', '🧬'];
+  const colorOptions = ['#3B82F6', '#8B5CF6', '#EC4899', '#10B981', '#F59E0B', '#EF4444', '#6366F1', '#14B8A6'];
 
   return (
     <div className="min-h-screen bg-black">
@@ -323,6 +377,139 @@ function TeacherDashboard() {
           </>
         )}
       </main>
+
+      {/* Create Subject Modal */}
+      {showCreateSubject && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-gray-800 rounded-2xl p-8 max-w-md w-full border border-gray-700 shadow-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-2xl font-bold text-white">Create Subject for All Students</h3>
+              <button
+                onClick={() => setShowCreateSubject(false)}
+                className="p-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-400 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateSubject} className="space-y-5">
+              {/* Subject Name */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Subject Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={subjectForm.name}
+                  onChange={(e) => setSubjectForm({ ...subjectForm, name: e.target.value })}
+                  placeholder="e.g., Introduction to Computer Science"
+                  className="w-full px-4 py-3 rounded-lg bg-gray-900 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Description (Optional)
+                </label>
+                <textarea
+                  value={subjectForm.description}
+                  onChange={(e) => setSubjectForm({ ...subjectForm, description: e.target.value })}
+                  placeholder="Brief description of the subject..."
+                  rows="3"
+                  className="w-full px-4 py-3 rounded-lg bg-gray-900 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+                />
+              </div>
+
+              {/* Icon Selector */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Icon
+                </label>
+                <div className="grid grid-cols-5 gap-2">
+                  {iconOptions.map((emoji) => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      onClick={() => setSubjectForm({ ...subjectForm, icon: emoji })}
+                      className={`p-3 rounded-lg text-2xl transition-all ${
+                        subjectForm.icon === emoji
+                          ? 'bg-purple-600 scale-110'
+                          : 'bg-gray-900 hover:bg-gray-700'
+                      }`}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Color Selector */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Color
+                </label>
+                <div className="grid grid-cols-4 gap-2">
+                  {colorOptions.map((clr) => (
+                    <button
+                      key={clr}
+                      type="button"
+                      onClick={() => setSubjectForm({ ...subjectForm, color: clr })}
+                      className={`h-12 rounded-lg transition-all ${
+                        subjectForm.color === clr
+                          ? 'ring-4 ring-white scale-105'
+                          : 'hover:scale-105'
+                      }`}
+                      style={{ backgroundColor: clr }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Preview */}
+              <div className="p-4 rounded-lg bg-gray-900 border border-gray-700">
+                <p className="text-xs text-gray-500 mb-2">Preview:</p>
+                <div className="flex items-center gap-3">
+                  <div 
+                    className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl"
+                    style={{ backgroundColor: subjectForm.color }}
+                  >
+                    {subjectForm.icon}
+                  </div>
+                  <div>
+                    <p className="font-medium text-white">{subjectForm.name || 'Subject Name'}</p>
+                    <p className="text-sm text-gray-500">{subjectForm.description || 'No description'}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Warning */}
+              <div className="p-4 rounded-lg bg-yellow-900/20 border border-yellow-700/50">
+                <p className="text-sm text-yellow-400">
+                  ⚠️ This will create "{subjectForm.name || 'this subject'}" for <strong>{students.length} students</strong>
+                </p>
+              </div>
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={creating || !subjectForm.name}
+                className="w-full py-3 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              >
+                {creating ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Creating...
+                  </span>
+                ) : (
+                  `Create for ${students.length} Students`
+                )}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

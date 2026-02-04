@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Sparkles, RefreshCw, Check, X, ClipboardCheck } from 'lucide-react'
+import { Sparkles, RefreshCw, Check, X, ClipboardCheck, Clock, AlertCircle } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { generateQuiz } from '../lib/api'
 import useStore from '../store/useStore'
+import api from '../lib/api'
 
 export default function QuizTab({ document }) {
   const { quizzes, setQuiz, updateQuizScore } = useStore()
@@ -16,8 +17,35 @@ export default function QuizTab({ document }) {
   const [showResult, setShowResult] = useState(false)
   const [answers, setAnswers] = useState({})
   const [quizComplete, setQuizComplete] = useState(false)
+  const [quizId, setQuizId] = useState(null)
+  const [examMode, setExamMode] = useState(false)
+  const [timeLimit, setTimeLimit] = useState(10) // minutes
+  const [timeRemaining, setTimeRemaining] = useState(null)
+  const [examSubmitted, setExamSubmitted] = useState(false)
 
   const quiz = quizzes[document.id]
+
+  // Timer for exam mode
+  useEffect(() => {
+    if (examMode && quiz && !quizComplete && !examSubmitted && timeRemaining > 0) {
+      const timer = setInterval(() => {
+        setTimeRemaining(prev => {
+          if (prev <= 1) {
+            handleExamSubmit()
+            return 0
+          }
+          return prev - 1
+        })
+      }, 1000)
+      return () => clearInterval(timer)
+    }
+  }, [examMode, quiz, quizComplete, examSubmitted, timeRemaining])
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins}:${secs.toString().padStart(2, '0')}`
+  }
 
   const handleGenerate = async () => {
     setLoading(true)
@@ -27,6 +55,12 @@ export default function QuizTab({ document }) {
     setShowResult(false)
     setAnswers({})
     setQuizComplete(false)
+    setExamSubmitted(false)
+    
+    // Initialize timer for exam mode
+    if (examMode) {
+      setTimeRemaining(timeLimit * 60)
+    }
 
     try {
       const result = await generateQuiz(document.content, { 
@@ -34,6 +68,21 @@ export default function QuizTab({ document }) {
         questionCount: count 
       })
       setQuiz(document.id, result)
+      
+      // Save quiz to database to get quiz ID
+      try {
+        const { data } = await api.post('/quizzes', {
+          title: `${document.name || 'Quiz'} - ${difficulty}${examMode ? ' (Exam Mode)' : ''}`,
+          subjectId: document.id,
+          topicId: null,
+          difficulty,
+          questions: result.questions
+        })
+        setQuizId(data.data.id)
+        console.log('✅ Quiz saved to database with ID:', data.data.id)
+      } catch (dbError) {
+        console.error('Failed to save quiz to database:', dbError)
+      }
     } catch (err) {
       setError(err.message)
     } finally {
@@ -42,8 +91,14 @@ export default function QuizTab({ document }) {
   }
 
   const handleSelectAnswer = (index) => {
-    if (showResult) return
-    setSelectedAnswer(index)
+    if (showResult && !examMode) return
+    if (examMode) {
+      // In exam mode, just store the answer
+      setAnswers({ ...answers, [currentQuestion]: index })
+      setSelectedAnswer(index)
+    } else {
+      setSelectedAnswer(index)
+    }
   }
 
   const handleSubmitAnswer = () => {
@@ -53,17 +108,55 @@ export default function QuizTab({ document }) {
   }
 
   const handleNextQuestion = () => {
-    if (currentQuestion < quiz.questions.length - 1) {
-      setCurrentQuestion(currentQuestion + 1)
-      setSelectedAnswer(null)
-      setShowResult(false)
+    if (examMode) {
+      // In exam mode, just navigate
+      if (currentQuestion < quiz.questions.length - 1) {
+        setCurrentQuestion(currentQuestion + 1)
+        setSelectedAnswer(answers[currentQuestion + 1] ?? null)
+      }
     } else {
-      const score = Object.entries({ ...answers, [currentQuestion]: selectedAnswer })
-        .filter(([qIndex, aIndex]) => quiz.questions[parseInt(qIndex)]?.correctIndex === aIndex)
-        .length
-      updateQuizScore(document.id, score, quiz.questions.length, { difficulty })
-      setQuizComplete(true)
+      if (currentQuestion < quiz.questions.length - 1) {
+        setCurrentQuestion(currentQuestion + 1)
+        setSelectedAnswer(null)
+        setShowResult(false)
+      } else {
+        const score = Object.entries({ ...answers, [currentQuestion]: selectedAnswer })
+          .filter(([qIndex, aIndex]) => quiz.questions[parseInt(qIndex)]?.correctIndex === aIndex)
+          .length
+        
+        updateQuizScore(document.id, score, quiz.questions.length, { 
+          difficulty,
+          quizId: quizId,
+          answers: { ...answers, [currentQuestion]: selectedAnswer }
+        })
+        setQuizComplete(true)
+      }
     }
+  }
+
+  const handlePreviousQuestion = () => {
+    if (currentQuestion > 0) {
+      setCurrentQuestion(currentQuestion - 1)
+      setSelectedAnswer(answers[currentQuestion - 1] ?? null)
+    }
+  }
+
+  const handleExamSubmit = () => {
+    const score = Object.entries(answers)
+      .filter(([qIndex, aIndex]) => quiz.questions[parseInt(qIndex)]?.correctIndex === aIndex)
+      .length
+    
+    updateQuizScore(document.id, score, quiz.questions.length, { 
+      difficulty,
+      quizId: quizId,
+      answers: answers
+    })
+    setExamSubmitted(true)
+    setQuizComplete(true)
+  }
+
+  const getAnsweredCount = () => {
+    return Object.keys(answers).length
   }
 
   const getScore = () => {
@@ -78,6 +171,9 @@ export default function QuizTab({ document }) {
     setShowResult(false)
     setAnswers({})
     setQuizComplete(false)
+    setQuizId(null)
+    setExamSubmitted(false)
+    setTimeRemaining(examMode ? timeLimit * 60 : null)
   }
 
   // Setup view
@@ -87,6 +183,27 @@ export default function QuizTab({ document }) {
         <div className="card p-8 lg:p-10">
           <h2 className="text-2xl font-bold text-white mb-2">Generate Quiz</h2>
           <p className="text-gray-400 mb-10">Customize your quiz and test your knowledge</p>
+
+          {/* Mode Toggle */}
+          <div className="mb-8 p-4 rounded-xl bg-white/5 border border-white/10">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={examMode}
+                onChange={(e) => setExamMode(e.target.checked)}
+                className="w-5 h-5 rounded border-white/20 bg-white/10 checked:bg-blue-500"
+              />
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-blue-400" />
+                  <span className="font-semibold text-white">Exam Mode</span>
+                </div>
+                <p className="text-sm text-gray-400 mt-1">
+                  Timed test with no hints. All questions answered before seeing results.
+                </p>
+              </div>
+            </label>
+          </div>
 
           <div className="grid md:grid-cols-2 gap-10 mb-10">
             <div>
@@ -130,6 +247,28 @@ export default function QuizTab({ document }) {
             </div>
           </div>
 
+          {/* Time Limit for Exam Mode */}
+          {examMode && (
+            <div className="mb-10">
+              <label className="block text-sm font-medium text-gray-300 mb-4">
+                Time Limit: <span className="text-blue-400 font-bold">{timeLimit} minutes</span>
+              </label>
+              <input
+                type="range"
+                min="5"
+                max="60"
+                step="5"
+                value={timeLimit}
+                onChange={(e) => setTimeLimit(parseInt(e.target.value))}
+                className="w-full"
+              />
+              <div className="flex justify-between text-xs text-gray-500 mt-2">
+                <span>5 min</span>
+                <span>60 min</span>
+              </div>
+            </div>
+          )}
+
           {error && (
             <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 mb-6">
               {error}
@@ -145,7 +284,7 @@ export default function QuizTab({ document }) {
             ) : (
               <>
                 <Sparkles className="w-4 h-4" />
-                Generate Quiz
+                {examMode ? 'Start Exam' : 'Generate Quiz'}
               </>
             )}
           </button>
@@ -191,9 +330,36 @@ export default function QuizTab({ document }) {
   const questions = quiz.questions
   const currentQ = questions[currentQuestion]
   const isCorrect = selectedAnswer === currentQ?.correctIndex
+  const answeredCount = getAnsweredCount()
+  const allAnswered = answeredCount === questions.length
 
   return (
     <div className="space-y-6">
+      {/* Timer and Progress for Exam Mode */}
+      {examMode && (
+        <div className="card p-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Clock className={cn(
+              "w-5 h-5",
+              timeRemaining < 60 ? "text-red-400" : "text-blue-400"
+            )} />
+            <div>
+              <div className={cn(
+                "text-2xl font-bold",
+                timeRemaining < 60 ? "text-red-400" : "text-white"
+              )}>
+                {formatTime(timeRemaining)}
+              </div>
+              <div className="text-xs text-gray-400">Time Remaining</div>
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-2xl font-bold text-white">{answeredCount}/{questions.length}</div>
+            <div className="text-xs text-gray-400">Answered</div>
+          </div>
+        </div>
+      )}
+
       {/* Progress */}
       <div className="flex items-center gap-4">
         <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
@@ -216,9 +382,16 @@ export default function QuizTab({ document }) {
         className="card p-8 lg:p-10"
       >
         <div className="mb-8">
-          <span className="text-sm text-blue-400 font-semibold uppercase tracking-wider">
-            Question {currentQuestion + 1}
-          </span>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-blue-400 font-semibold uppercase tracking-wider">
+              Question {currentQuestion + 1}
+            </span>
+            {examMode && answers[currentQuestion] !== undefined && (
+              <span className="text-xs text-emerald-400 flex items-center gap-1">
+                <Check className="w-3 h-3" /> Answered
+              </span>
+            )}
+          </div>
           <h3 className="text-2xl font-bold text-white mt-2">{currentQ?.question}</h3>
         </div>
 
@@ -226,15 +399,16 @@ export default function QuizTab({ document }) {
           {currentQ?.options?.map((option, i) => {
             const isSelected = selectedAnswer === i
             const isCorrectAnswer = i === currentQ.correctIndex
+            const showCorrectness = showResult && !examMode
 
             return (
               <button
                 key={i}
                 onClick={() => handleSelectAnswer(i)}
-                disabled={showResult}
+                disabled={showCorrectness}
                 className={cn(
                   "w-full p-4 rounded-xl text-left font-medium transition-all flex items-center gap-4",
-                  showResult
+                  showCorrectness
                     ? isCorrectAnswer
                       ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-400 border neon-green"
                       : isSelected
@@ -247,11 +421,11 @@ export default function QuizTab({ document }) {
               >
                 <span className={cn(
                   "w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold flex-shrink-0",
-                  showResult
+                  showCorrectness
                     ? isCorrectAnswer ? "bg-emerald-500/30" : isSelected ? "bg-red-500/30" : "bg-white/10"
                     : isSelected ? "bg-blue-500/30" : "bg-white/10"
                 )}>
-                  {showResult ? (
+                  {showCorrectness ? (
                     isCorrectAnswer ? <Check className="w-4 h-4" /> : isSelected ? <X className="w-4 h-4" /> : String.fromCharCode(65 + i)
                   ) : String.fromCharCode(65 + i)}
                 </span>
@@ -261,7 +435,7 @@ export default function QuizTab({ document }) {
           })}
         </div>
 
-        {showResult && currentQ?.explanation && (
+        {showResult && currentQ?.explanation && !examMode && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -276,21 +450,68 @@ export default function QuizTab({ document }) {
           </motion.div>
         )}
 
-        <div className="flex justify-end">
-          {!showResult ? (
-            <button
-              onClick={handleSubmitAnswer}
-              disabled={selectedAnswer === null}
-              className="btn btn-primary"
-            >
-              Submit Answer
-            </button>
+        {/* Navigation */}
+        <div className="flex justify-between gap-4">
+          {examMode ? (
+            <>
+              <button
+                onClick={handlePreviousQuestion}
+                disabled={currentQuestion === 0}
+                className="btn btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Previous
+              </button>
+              <div className="flex gap-3">
+                {currentQuestion < questions.length - 1 ? (
+                  <button onClick={handleNextQuestion} className="btn btn-primary">
+                    Next Question
+                  </button>
+                ) : (
+                  <button 
+                    onClick={handleExamSubmit} 
+                    className={cn(
+                      "btn",
+                      allAnswered ? "btn-primary shimmer-button" : "btn-secondary"
+                    )}
+                  >
+                    <ClipboardCheck className="w-4 h-4" />
+                    Submit Exam {!allAnswered && `(${answeredCount}/${questions.length})`}
+                  </button>
+                )}
+              </div>
+            </>
           ) : (
-            <button onClick={handleNextQuestion} className="btn btn-primary shimmer-button">
-              {currentQuestion < questions.length - 1 ? 'Next Question' : 'See Results'}
-            </button>
+            <div className="ml-auto">
+              {!showResult ? (
+                <button
+                  onClick={handleSubmitAnswer}
+                  disabled={selectedAnswer === null}
+                  className="btn btn-primary"
+                >
+                  Submit Answer
+                </button>
+              ) : (
+                <button onClick={handleNextQuestion} className="btn btn-primary shimmer-button">
+                  {currentQuestion < questions.length - 1 ? 'Next Question' : 'See Results'}
+                </button>
+              )}
+            </div>
           )}
         </div>
+
+        {/* Exam Mode Warning */}
+        {examMode && !allAnswered && currentQuestion === questions.length - 1 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="mt-6 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3"
+          >
+            <AlertCircle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+            <div className="text-sm text-amber-400">
+              <strong>Warning:</strong> You haven't answered all questions yet. You can go back and answer them before submitting.
+            </div>
+          </motion.div>
+        )}
       </motion.div>
     </div>
   )

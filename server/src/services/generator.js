@@ -55,7 +55,7 @@ function initializeProviders() {
       throw new Error('GEMINI_API_KEY not found in environment variables');
     }
     const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-    geminiModel = genAI.getGenerativeModel({ 
+    geminiModel = genAI.getGenerativeModel({
       model: 'gemini-2.0-flash',
       generationConfig: {
         temperature: 0.7,
@@ -68,7 +68,7 @@ function initializeProviders() {
       throw new Error('GROQ_API_KEY not found in environment variables');
     }
     groqClient = new Groq({ apiKey: GROQ_API_KEY });
-    console.log('🤖 Using Groq (llama-3.3-70b-versatile) for generation');
+    console.log('🤖 Using Groq (groq/compound - unlimited tokens) for generation');
   }
 
   initialized = true;
@@ -99,7 +99,7 @@ async function generateText(prompt) {
   } else if (AI_PROVIDER === 'groq') {
     const completion = await groqClient.chat.completions.create({
       messages: [{ role: 'user', content: prompt }],
-      model: 'llama-3.3-70b-versatile',
+      model: 'groq/compound',
       temperature: 0.7,
       max_completion_tokens: 8192,
     });
@@ -178,7 +178,7 @@ function extractJSON(response) {
     // Count brackets to attempt repair
     let openBraces = 0, openBrackets = 0;
     let inString = false, escapeNext = false;
-    
+
     for (const char of jsonStr) {
       if (escapeNext) { escapeNext = false; continue; }
       if (char === '\\') { escapeNext = true; continue; }
@@ -189,7 +189,7 @@ function extractJSON(response) {
       if (char === '[') openBrackets++;
       if (char === ']') openBrackets--;
     }
-    
+
     // Add missing closing brackets/braces
     while (openBrackets > 0) { jsonStr += ']'; openBrackets--; }
     while (openBraces > 0) { jsonStr += '}'; openBraces--; }
@@ -428,7 +428,7 @@ RULES:
 
     const response = await generateText(prompt);
     console.log('📝 AI response length:', response.length);
-    
+
     const jsonStr = extractJSON(response);
 
     let parsed;
@@ -438,7 +438,7 @@ RULES:
       console.error('JSON parsing failed. Raw response:', response.substring(0, 500));
       throw new Error(`Invalid JSON from AI: ${parseError.message}`);
     }
-    
+
     // Ensure topics have IDs and week numbers
     if (parsed.topics) {
       parsed.topics = parsed.topics.map((topic, index) => ({
@@ -569,39 +569,106 @@ RULES:
  */
 export async function generateYouTubeQueries(topic, subjectContext = '') {
   try {
-    console.log(`🎬 Generating YouTube queries for: ${topic}`);
+    console.log(`🎬 Generating YouTube videos for: ${topic}`);
 
-    const prompt = `Generate YouTube search queries to find educational videos about this topic.
+    const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 
-Topic: ${topic}
-Subject Context: ${subjectContext}
-
-Generate a JSON object:
-{
-  "queries": [
-    {
-      "query": "search query for youtube",
-      "type": "explanation|tutorial|example|crash-course",
-      "description": "What this video would cover"
+    if (!YOUTUBE_API_KEY) {
+      console.warn('⚠️  YouTube API key not found, returning fallback queries');
+      return [{
+        query: `${topic} explained`,
+        type: 'explanation',
+        description: 'General explanation',
+        title: `${topic} - Comprehensive Explanation`,
+        thumbnail: null
+      }];
     }
-  ]
-}
 
-Generate 4-5 diverse queries:
-- One for basic explanation
-- One for worked examples
-- One for crash course/summary
-- One for advanced concepts
-Return ONLY valid JSON`;
+    // Use predefined queries instead of AI generation for SPEED (eliminates 2-3 second AI delay)
+    const queries = [
+      {
+        query: `${topic} ${subjectContext} tutorial explained`,
+        type: 'explanation',
+        description: 'Comprehensive explanation and overview'
+      },
+      {
+        query: `${topic} ${subjectContext} step by step example`,
+        type: 'tutorial',
+        description: 'Step-by-step walkthrough with examples'
+      },
+      {
+        query: `${topic} crash course`,
+        type: 'crash-course',
+        description: 'Quick crash course summary'
+      }
+    ];
 
-    const response = await generateText(prompt);
-    const jsonStr = extractJSON(response);
-    const parsed = JSON.parse(jsonStr);
+    // Fetch videos from YouTube - ALL REQUESTS IN PARALLEL for maximum speed
+    const videoPromises = queries.map(async (queryObj) => {
+      try {
+        const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(queryObj.query)}&type=video&videoCategoryId=27&maxResults=2&key=${YOUTUBE_API_KEY}`;
 
-    return parsed.queries || [];
+        const searchResponse = await fetch(searchUrl);
+        const searchData = await searchResponse.json();
+
+        if (!searchData.items || searchData.items.length === 0) {
+          return [];
+        }
+
+        // Get video IDs for fetching additional details
+        const videoIds = searchData.items.map(item => item.id.videoId).join(',');
+
+        // Fetch video details in parallel
+        const detailsUrl = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails,statistics&id=${videoIds}&key=${YOUTUBE_API_KEY}`;
+        const detailsResponse = await fetch(detailsUrl);
+        const detailsData = await detailsResponse.json();
+
+        // Combine search results with details
+        return searchData.items.map((item, i) => {
+          const details = detailsData.items?.[i];
+
+          return {
+            id: item.id.videoId,
+            title: item.snippet.title,
+            description: item.snippet.description,
+            thumbnail: item.snippet.thumbnails.medium?.url || item.snippet.thumbnails.default?.url,
+            thumbnailHigh: item.snippet.thumbnails.high?.url,
+            channel: item.snippet.channelTitle,
+            publishedAt: item.snippet.publishedAt,
+            url: `https://www.youtube.com/watch?v=${item.id.videoId}`,
+            type: queryObj.type,
+            category: queryObj.description,
+            viewCount: details?.statistics?.viewCount || '0',
+            duration: details?.contentDetails?.duration || 'PT0M0S'
+          };
+        });
+      } catch (error) {
+        console.error(`Error fetching videos for query "${queryObj.query}":`, error.message);
+        return [];
+      }
+    });
+
+    // Wait for all requests to complete in parallel (MUCH FASTER than sequential loop)
+    const videoArrays = await Promise.all(videoPromises);
+    const allVideos = videoArrays.flat();
+
+    console.log(`✅ Found ${allVideos.length} YouTube videos in parallel (${queries.length} queries)`);
+    return allVideos.length > 0 ? allVideos : [{
+      query: `${topic} explained`,
+      type: 'explanation',
+      description: 'General explanation video',
+      title: `${topic} - Full Explanation`,
+      thumbnail: null
+    }];
   } catch (error) {
-    console.error('Error generating YouTube queries:', error.message);
-    return [{ query: `${topic} explained`, type: 'explanation', description: 'General explanation' }];
+    console.error('Error generating YouTube videos:', error.message);
+    return [{
+      query: `${topic} explained`,
+      type: 'explanation',
+      description: 'General explanation',
+      title: `${topic} - Educational Video`,
+      thumbnail: null
+    }];
   }
 }
 

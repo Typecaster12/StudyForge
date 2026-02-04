@@ -336,10 +336,10 @@ export default function Dashboard() {
               <h2 className="text-2xl font-bold text-white mb-2">Add a Subject</h2>
               <p className="text-gray-400 mb-6">Create a new subject, upload a PDF, or choose a demo.</p>
 
-              {/* Tabs */}
+
+              {/* Tabs (Upload PDF and Demo Topics only) */}
               <div className="flex gap-2 mb-6">
                 {[
-                  { id: 'create', label: 'Create New', icon: Plus },
                   { id: 'upload', label: 'Upload PDF', icon: Upload },
                   { id: 'demo', label: 'Demo Topics', icon: GraduationCap },
                 ].map((tab) => (
@@ -358,50 +358,6 @@ export default function Dashboard() {
                   </button>
                 ))}
               </div>
-
-              {/* Create New Subject */}
-              {modalTab === 'create' && (
-                <div className="space-y-4">
-                  <div className="flex gap-3">
-                    <button className="w-14 h-14 rounded-xl bg-white/10 flex items-center justify-center text-2xl hover:bg-white/15 transition-colors">
-                      {newSubjectEmoji}
-                    </button>
-                    <input
-                      type="text"
-                      value={newSubjectName}
-                      onChange={(e) => setNewSubjectName(e.target.value)}
-                      placeholder="Enter subject name..."
-                      className="input flex-1"
-                      onKeyDown={(e) => e.key === 'Enter' && handleAddSubject()}
-                    />
-                    <button 
-                      onClick={handleAddSubject}
-                      disabled={!newSubjectName.trim()}
-                      className="btn btn-primary"
-                    >
-                      Add
-                    </button>
-                  </div>
-                  
-                  {/* Emoji Picker */}
-                  <div className="flex flex-wrap gap-2">
-                    {emojis.map((e) => (
-                      <button
-                        key={e}
-                        onClick={() => setNewSubjectEmoji(e)}
-                        className={cn(
-                          "w-10 h-10 rounded-lg flex items-center justify-center text-lg transition-all",
-                          newSubjectEmoji === e 
-                            ? "bg-blue-500/30 ring-2 ring-blue-500" 
-                            : "bg-white/5 hover:bg-white/10"
-                        )}
-                      >
-                        {e}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
 
               {/* Upload PDF */}
               {modalTab === 'upload' && (

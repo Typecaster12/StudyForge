@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -8,6 +8,7 @@ import {
   TrendingUp, TrendingDown, Target, Brain, 
   AlertTriangle, CheckCircle, Clock, Zap 
 } from 'lucide-react';
+import api from '../lib/api';
 import useStore from '../store/useStore';
 
 // Chart color scheme matching dark theme
@@ -42,10 +43,51 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 export default function Analytics() {
+  // Get local state from Zustand store
   const { subjects, quizScores, flashcardProgress, topicProgress, flashcards } = useStore();
+  
+  // State for backend analytics data
+  const [backendData, setBackendData] = useState({
+    summary: null,
+    quizHistory: [],
+    subjectProgress: [],
+    studySessions: { sessions: [], byDay: {} },
+    weakTopics: [],
+    loading: true,
+    error: null
+  });
 
-  // Calculate analytics data
-  const analyticsData = useMemo(() => {
+  // Fetch all analytics data from database
+  useEffect(() => {
+    const fetchAnalytics = async () => {
+      try {
+        const [summaryRes, quizHistoryRes, subjectProgressRes, studySessionsRes] = await Promise.all([
+          api.get('/analytics/summary'),
+          api.get('/analytics/quiz-history?limit=20'),
+          api.get('/analytics/subject-progress'),
+          api.get('/analytics/study-sessions?days=7')
+        ]);
+
+        setBackendData({
+          summary: summaryRes.data.data,
+          quizHistory: quizHistoryRes.data.data,
+          subjectProgress: subjectProgressRes.data.data,
+          studySessions: studySessionsRes.data.data,
+          weakTopics: summaryRes.data.data.weakTopics || [],
+          loading: false,
+          error: null
+        });
+      } catch (error) {
+        console.error('Failed to fetch analytics:', error);
+        setBackendData(prev => ({ ...prev, loading: false, error: 'Failed to load analytics' }));
+      }
+    };
+
+    fetchAnalytics();
+  }, []);
+
+  // Calculate local analytics data (fallback if backend data not available)
+  const localAnalytics = useMemo(() => {
     // Subject completion data
     const subjectCompletion = subjects.map(subject => {
       const topics = subject.topics || [];
@@ -195,10 +237,112 @@ export default function Analytics() {
     };
   }, [subjects, quizScores, flashcardProgress, topicProgress, flashcards]);
 
-  const { subjectCompletion, quizHistory, weakTopics, activityData, flashcardMastery, summary } = analyticsData;
+  // Merge backend data with local analytics (prioritize backend when available)
+  const analyticsData = useMemo(() => {
+    if (backendData.loading) {
+      return {
+        ...localAnalytics,
+        loading: true,
+        error: null
+      };
+    }
+
+    if (backendData.error) {
+      return {
+        ...localAnalytics,
+        loading: false,
+        error: backendData.error
+      };
+    }
+
+    // Merge quiz history from both sources
+    const mergedQuizHistory = backendData.quizHistory.length > 0 
+      ? backendData.quizHistory.map(quiz => ({
+          date: new Date(quiz.date || quiz.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          timestamp: new Date(quiz.date || quiz.createdAt).getTime(),
+          score: quiz.percentage,
+          subject: quiz.subjectName || 'Unknown',
+          difficulty: quiz.difficulty || 'medium'
+        }))
+      : localAnalytics.quizHistory;
+
+    // Merge subject completion
+    const mergedSubjectCompletion = backendData.subjectProgress.length > 0
+      ? backendData.subjectProgress.map(subject => ({
+          name: subject.name.length > 12 ? subject.name.slice(0, 12) + '...' : subject.name,
+          fullName: subject.name,
+          completed: subject.topicsCompleted || 0,
+          total: subject.topicsTotal || 0,
+          percentage: subject.completionPercentage || 0,
+          emoji: subject.emoji || subjects.find(s => s.id === subject.subjectId)?.emoji || '📚'
+        }))
+      : localAnalytics.subjectCompletion;
+
+    // Merge summary statistics
+    const mergedSummary = backendData.summary 
+      ? {
+          totalTopics: backendData.summary.topicsTotal || localAnalytics.summary.totalTopics,
+          studiedTopics: backendData.summary.topicsCompleted || localAnalytics.summary.studiedTopics,
+          topicsProgress: backendData.summary.topicsTotal > 0 
+            ? Math.round((backendData.summary.topicsCompleted / backendData.summary.topicsTotal) * 100)
+            : localAnalytics.summary.topicsProgress,
+          avgQuizScore: backendData.summary.averageScore || localAnalytics.summary.avgQuizScore,
+          scoreTrend: localAnalytics.summary.scoreTrend, // Keep local calculation for trend
+          weakTopicsCount: backendData.summary.weakTopicsCount || localAnalytics.summary.weakTopicsCount,
+          totalQuizzes: backendData.summary.quizzesCompleted || localAnalytics.summary.totalQuizzes
+        }
+      : localAnalytics.summary;
+
+    // Merge weak topics
+    const mergedWeakTopics = backendData.weakTopics.length > 0
+      ? backendData.weakTopics.map(topic => ({
+          id: topic.topicId,
+          name: topic.topicName,
+          subject: topic.subjectName,
+          subjectId: topic.subjectId,
+          subjectEmoji: subjects.find(s => s.id === topic.subjectId)?.emoji || '📚',
+          isStudied: topic.status === 'completed',
+          avgScore: topic.averageScore ? Math.round(topic.averageScore) : null,
+          reason: topic.status !== 'completed' ? 'Not studied' : 'Low score'
+        }))
+      : localAnalytics.weakTopics;
+
+    return {
+      subjectCompletion: mergedSubjectCompletion,
+      quizHistory: mergedQuizHistory,
+      weakTopics: mergedWeakTopics,
+      activityData: localAnalytics.activityData, // Keep local for now
+      flashcardMastery: localAnalytics.flashcardMastery, // Keep local for now
+      summary: mergedSummary,
+      loading: false,
+      error: null
+    };
+  }, [backendData, localAnalytics, subjects]);
+
+  const { subjectCompletion, quizHistory, weakTopics, activityData, flashcardMastery, summary, loading, error } = analyticsData;
 
   return (
     <div className="space-y-8">
+      {/* Loading State */}
+      {loading && (
+        <div className="flex items-center justify-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+        </div>
+      )}
+
+      {/* Error State */}
+      {error && (
+        <div className="card p-6 border-red-500/20 bg-red-500/5">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="w-6 h-6 text-red-400" />
+            <div>
+              <div className="text-red-400 font-semibold">Failed to load analytics</div>
+              <div className="text-gray-400 text-sm mt-1">{error}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <motion.div 

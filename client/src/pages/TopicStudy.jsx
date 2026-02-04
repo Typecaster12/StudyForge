@@ -1,8 +1,8 @@
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { 
-  Sparkles, ArrowLeft, CheckCircle, BookOpen, 
+import {
+  Sparkles, ArrowLeft, CheckCircle, BookOpen,
   MessageCircle, RefreshCw, ChevronLeft, ChevronRight,
   Youtube, ExternalLink, Loader2
 } from 'lucide-react'
@@ -14,12 +14,12 @@ import { chatWithDocument, generateYouTubeQueries } from '../lib/api'
 export default function TopicStudy() {
   const { subjectId, topicId } = useParams()
   const navigate = useNavigate()
-  const { 
-    subjects, currentSubject, setCurrentSubject, 
+  const {
+    subjects, currentSubject, setCurrentSubject,
     topicContent, setTopicContent, markTopicStudied,
     isLoading, fetchSubjects, fetchSubjectDetails
   } = useStore()
-  
+
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [question, setQuestion] = useState('')
@@ -33,7 +33,7 @@ export default function TopicStudy() {
   const subject = subjects.find(s => s.id === subjectId) || currentSubject
   const topic = subject?.topics?.find(t => t.id === topicId)
   const topicIndex = subject?.topics?.findIndex(t => t.id === topicId) || 0
-  
+
   // Get cached AI content
   const cachedContent = topicContent[`${subjectId}-${topicId}`]
 
@@ -41,21 +41,21 @@ export default function TopicStudy() {
   useEffect(() => {
     const initializeData = async () => {
       setInitializing(true)
-      
+
       // If subjects are empty, fetch them first
       if (subjects.length === 0) {
         await fetchSubjects()
       }
-      
+
       // If subject still not found in local state, try fetching details
       const foundSubject = subjects.find(s => s.id === subjectId)
       if (!foundSubject && subjectId) {
         await fetchSubjectDetails(subjectId)
       }
-      
+
       setInitializing(false)
     }
-    
+
     initializeData()
   }, [subjectId, subjects.length, fetchSubjects, fetchSubjectDetails])
 
@@ -91,10 +91,10 @@ export default function TopicStudy() {
 
   const generateExplanation = async () => {
     if (!topic) return
-    
+
     setLoading(true)
     setError(null)
-    
+
     try {
       const prompt = `Explain "${topic.title}" in detail for a student studying ${subject.name}. 
       
@@ -121,10 +121,10 @@ Format the response with clear sections and bullet points.`
   const handleAskQuestion = async (e) => {
     e.preventDefault()
     if (!question.trim() || askingQuestion) return
-    
+
     setAskingQuestion(true)
     setAnswer(null)
-    
+
     try {
       const context = `Topic: ${topic.title}\n\nContent: ${topic.content}\n\nDetailed Explanation: ${cachedContent || ''}`
       const result = await chatWithDocument(context, question, [])
@@ -138,7 +138,7 @@ Format the response with clear sections and bullet points.`
 
   const fetchYouTubeQueries = async () => {
     if (!topic) return
-    
+
     setLoadingYoutube(true)
     try {
       const queries = await generateYouTubeQueries(topic.title, subject.name)
@@ -230,7 +230,7 @@ Format the response with clear sections and bullet points.`
       {/* Content */}
       <main className="relative max-w-5xl mx-auto px-6 lg:px-8 py-10">
         {/* Topic Header */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
@@ -254,7 +254,7 @@ Format the response with clear sections and bullet points.`
 
         {/* Original Content */}
         {topic.content && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
@@ -271,7 +271,7 @@ Format the response with clear sections and bullet points.`
         )}
 
         {/* AI Generated Explanation */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
@@ -332,7 +332,7 @@ Format the response with clear sections and bullet points.`
         </motion.div>
 
         {/* Ask a Question */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
@@ -381,13 +381,13 @@ Format the response with clear sections and bullet points.`
         </motion.div>
 
         {/* YouTube Video Suggestions */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.35 }}
           className="card p-6 lg:p-8 mb-6"
         >
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-6">
             <h2 className="text-lg font-semibold text-white flex items-center gap-2">
               <Youtube className="w-5 h-5 text-red-500" />
               YouTube Video Suggestions
@@ -407,35 +407,98 @@ Format the response with clear sections and bullet points.`
           </div>
 
           {youtubeQueries.length > 0 ? (
-            <div className="grid gap-3">
-              {youtubeQueries.map((item, index) => (
-                <button
-                  key={index}
-                  onClick={() => openYouTubeSearch(item.query)}
-                  className="flex items-start gap-4 p-4 rounded-xl bg-white/5 hover:bg-red-500/10 border border-white/10 hover:border-red-500/30 transition-all text-left group"
-                >
-                  <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center flex-shrink-0">
-                    <Youtube className="w-5 h-5 text-red-400" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-white font-medium group-hover:text-red-300 transition-colors">
-                        {item.query}
-                      </span>
-                      <ExternalLink className="w-3.5 h-3.5 text-gray-500 group-hover:text-red-400 transition-colors" />
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {youtubeQueries.map((video, index) => {
+                // Parse duration from ISO 8601 format (PT1H2M10S)
+                const parseDuration = (duration) => {
+                  if (!duration || duration === 'PT0M0S') return 'N/A';
+                  const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+                  if (!match) return 'N/A';
+                  const hours = match[1] ? parseInt(match[1]) : 0;
+                  const minutes = match[2] ? parseInt(match[2]) : 0;
+                  const seconds = match[3] ? parseInt(match[3]) : 0;
+
+                  if (hours > 0) return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                };
+
+                // Format view count
+                const formatViews = (count) => {
+                  const num = parseInt(count);
+                  if (isNaN(num)) return '0 views';
+                  if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M views`;
+                  if (num >= 1000) return `${(num / 1000).toFixed(1)}K views`;
+                  return `${num} views`;
+                };
+
+                const duration = parseDuration(video.duration);
+                const views = formatViews(video.viewCount);
+
+                return (
+                  <a
+                    key={video.id || index}
+                    href={video.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group block rounded-xl overflow-hidden bg-white/5 hover:bg-white/10 border border-white/10 hover:border-red-500/30 transition-all"
+                  >
+                    {/* Thumbnail */}
+                    <div className="relative aspect-video bg-gradient-to-br from-gray-800 to-gray-900 overflow-hidden">
+                      {video.thumbnail ? (
+                        <>
+                          <img
+                            src={video.thumbnail}
+                            alt={video.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            loading="lazy"
+                          />
+                          {/* Duration Badge */}
+                          {duration !== 'N/A' && (
+                            <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/80 text-white text-xs font-medium">
+                              {duration}
+                            </div>
+                          )}
+                          {/* Play Overlay */}
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/30 transition-colors">
+                            <div className="w-12 h-12 rounded-full bg-red-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transform scale-75 group-hover:scale-100 transition-all">
+                              <Youtube className="w-6 h-6 text-white" />
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Youtube className="w-12 h-12 text-gray-600" />
+                        </div>
+                      )}
                     </div>
-                    <p className="text-sm text-gray-400">{item.description}</p>
-                    <span className="inline-block mt-2 px-2 py-0.5 rounded text-xs bg-gray-700/50 text-gray-400 capitalize">
-                      {item.type}
-                    </span>
-                  </div>
-                </button>
-              ))}
+
+                    {/* Video Info */}
+                    <div className="p-3">
+                      <h3 className="text-sm font-medium text-white line-clamp-2 mb-2 group-hover:text-red-300 transition-colors">
+                        {video.title}
+                      </h3>
+
+                      <div className="flex items-center gap-2 text-xs text-gray-400 mb-2">
+                        <span className="truncate">{video.channel}</span>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-gray-500">{views}</span>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-500/20 text-blue-300 capitalize">
+                          {video.type}
+                        </span>
+                      </div>
+                    </div>
+                  </a>
+                );
+              })}
             </div>
           ) : (
-            <div className="text-center py-8">
-              <Youtube className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-              <p className="text-gray-400 mb-2">Find YouTube videos to help you learn this topic</p>
+            <div className="text-center py-12">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-red-500/20 to-red-600/20 flex items-center justify-center mx-auto mb-4">
+                <Youtube className="w-8 h-8 text-red-400" />
+              </div>
+              <p className="text-gray-400 mb-4">Find YouTube videos to help you learn this topic</p>
               <button
                 onClick={fetchYouTubeQueries}
                 disabled={loadingYoutube}
@@ -458,7 +521,7 @@ Format the response with clear sections and bullet points.`
         </motion.div>
 
         {/* Navigation */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
@@ -469,8 +532,8 @@ Format the response with clear sections and bullet points.`
             disabled={!hasPrev}
             className={cn(
               "flex items-center gap-2 px-4 py-2 rounded-xl transition-colors",
-              hasPrev 
-                ? "text-gray-400 hover:text-white hover:bg-white/10" 
+              hasPrev
+                ? "text-gray-400 hover:text-white hover:bg-white/10"
                 : "text-gray-700 cursor-not-allowed"
             )}
           >
@@ -491,8 +554,8 @@ Format the response with clear sections and bullet points.`
             disabled={!hasNext}
             className={cn(
               "flex items-center gap-2 px-4 py-2 rounded-xl transition-colors",
-              hasNext 
-                ? "text-gray-400 hover:text-white hover:bg-white/10" 
+              hasNext
+                ? "text-gray-400 hover:text-white hover:bg-white/10"
                 : "text-gray-700 cursor-not-allowed"
             )}
           >

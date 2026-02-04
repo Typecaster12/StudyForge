@@ -184,7 +184,7 @@ export default function Landing() {
           >
             {[
               { value: '10x', label: 'Faster Learning' },
-              { value: '100%', label: 'AI-Powered' },
+              { value: 'Instant', label: 'Study Materials' },
               { value: 'Free', label: 'To Start' }
             ].map((stat, i) => (
               <div key={i} className="text-center">
@@ -193,16 +193,6 @@ export default function Landing() {
               </div>
             ))}
           </motion.div>
-        </div>
-
-        {/* Scroll indicator */}
-        <div className="absolute bottom-12 left-1/2 -translate-x-1/2">
-          <div className="flex flex-col items-center gap-2">
-            <span className="text-xs text-gray-500 uppercase tracking-[0.2em]">Scroll</span>
-            <div className="w-5 h-9 border-2 border-gray-600 rounded-full flex justify-center pt-2">
-              <div className="w-1 h-1.5 bg-blue-500 rounded-full" />
-            </div>
-          </div>
         </div>
       </section>
 

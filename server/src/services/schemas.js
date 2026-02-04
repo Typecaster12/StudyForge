@@ -18,7 +18,7 @@ export const QuizSchema = z.object({
 export const FlashcardSchema = z.object({
   term: z.string().min(2, 'Term must be at least 2 characters'),
   definition: z.string().min(5, 'Definition must be at least 5 characters'),
-  example: z.string().optional(),
+  example: z.string().optional().nullable(),
 });
 
 // Schema for flashcard deck
