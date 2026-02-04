@@ -1,35 +1,110 @@
 import express from 'express';
-import { z } from 'zod';
+import jwt from 'jsonwebtoken';
+import { eq, and, desc, sql, count, avg, gt } from 'drizzle-orm';
+import { db } from '../services/storage.js';
+import * as schema from '../db/schema.js';
 
 const router = express.Router();
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
-// In-memory storage (will be replaced with database later)
-const studentsStore = new Map(); // studentId -> student data
-const enrollmentsStore = new Map(); // teacherId -> [studentIds]
-const progressData = new Map(); // studentId -> progress history
+// Middleware to get user from token
+async function getUserFromToken(req) {
+  const token = req.cookies?.auth_token;
+  if (!token) return null;
+  
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const [user] = await db
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.id, decoded.userId))
+      .limit(1);
+    return user;
+  } catch {
+    return null;
+  }
+}
+
+// Middleware to verify teacher role
+async function requireTeacher(req, res, next) {
+  const user = await getUserFromToken(req);
+  if (!user) {
+    return res.status(401).json({ error: { message: 'Not authenticated' } });
+  }
+  if (user.role !== 'teacher') {
+    return res.status(403).json({ error: { message: 'Teacher access required' } });
+  }
+  req.user = user;
+  next();
+}
 
 /**
- * GET /api/teacher/students - Get all students enrolled with this teacher
+ * GET /api/teacher/students - Get all students (for teacher view)
  */
-router.get('/students', async (req, res, next) => {
+router.get('/students', requireTeacher, async (req, res, next) => {
   try {
-    // For now, return all students (add teacherId filtering later with auth)
-    const teacherId = req.query.teacherId || 'teacher-1';
-    const studentIds = enrollmentsStore.get(teacherId) || [];
-    
-    const students = studentIds.map(id => {
-      const student = studentsStore.get(id);
-      const progress = progressData.get(id) || {};
-      
-      return {
-        id,
-        ...student,
-        stats: calculateStudentStats(id, progress),
-      };
-    });
+    // Get all students (users with role 'student')
+    const students = await db
+      .select({
+        id: schema.users.id,
+        name: schema.users.name,
+        email: schema.users.email,
+        avatarUrl: schema.users.avatarUrl,
+        lastLogin: schema.users.lastLogin,
+        createdAt: schema.users.createdAt,
+      })
+      .from(schema.users)
+      .where(eq(schema.users.role, 'student'))
+      .orderBy(desc(schema.users.lastLogin));
 
-    res.json({ success: true, data: students });
+    // Get stats for each student
+    const studentsWithStats = await Promise.all(students.map(async (student) => {
+      // Count subjects
+      const [subjectsResult] = await db
+        .select({ count: count() })
+        .from(schema.subjects)
+        .where(eq(schema.subjects.userId, student.id));
+
+      // Count quizzes taken
+      const [quizzesResult] = await db
+        .select({ count: count() })
+        .from(schema.quizResults)
+        .where(eq(schema.quizResults.userId, student.id));
+
+      // Average quiz score
+      const [avgResult] = await db
+        .select({ avgScore: avg(schema.quizResults.percentage) })
+        .from(schema.quizResults)
+        .where(eq(schema.quizResults.userId, student.id));
+
+      // Count completed topics
+      const [topicsResult] = await db
+        .select({ 
+          total: count(),
+          completed: sql`count(*) filter (where ${schema.topics.status} = 'completed')`
+        })
+        .from(schema.topics)
+        .innerJoin(schema.subjects, eq(schema.topics.subjectId, schema.subjects.id))
+        .where(eq(schema.subjects.userId, student.id));
+
+      return {
+        ...student,
+        stats: {
+          subjectsCount: Number(subjectsResult?.count || 0),
+          quizzesCompleted: Number(quizzesResult?.count || 0),
+          averageScore: Math.round(Number(avgResult?.avgScore || 0)),
+          topicsTotal: Number(topicsResult?.total || 0),
+          topicsCompleted: Number(topicsResult?.completed || 0),
+          progressPercentage: topicsResult?.total > 0 
+            ? Math.round((Number(topicsResult.completed) / Number(topicsResult.total)) * 100)
+            : 0,
+        }
+      };
+    }));
+
+    res.json({ success: true, data: studentsWithStats });
   } catch (error) {
+    console.error('Get students error:', error);
     next(error);
   }
 });
@@ -37,26 +112,81 @@ router.get('/students', async (req, res, next) => {
 /**
  * GET /api/teacher/student/:studentId - Get detailed info for one student
  */
-router.get('/student/:studentId', async (req, res, next) => {
+router.get('/student/:studentId', requireTeacher, async (req, res, next) => {
   try {
     const { studentId } = req.params;
-    const student = studentsStore.get(studentId);
-    
+
+    // Get student info
+    const [student] = await db
+      .select()
+      .from(schema.users)
+      .where(and(
+        eq(schema.users.id, studentId),
+        eq(schema.users.role, 'student')
+      ))
+      .limit(1);
+
     if (!student) {
       return res.status(404).json({ error: { message: 'Student not found' } });
     }
 
-    const progress = progressData.get(studentId) || {};
-    const detailedStats = calculateDetailedStats(studentId, progress);
+    // Get subjects with topics
+    const studentSubjects = await db
+      .select()
+      .from(schema.subjects)
+      .where(eq(schema.subjects.userId, studentId))
+      .orderBy(desc(schema.subjects.updatedAt));
+
+    // Get quiz results
+    const quizResults = await db
+      .select()
+      .from(schema.quizResults)
+      .innerJoin(schema.quizzes, eq(schema.quizResults.quizId, schema.quizzes.id))
+      .where(eq(schema.quizResults.userId, studentId))
+      .orderBy(desc(schema.quizResults.createdAt))
+      .limit(20);
+
+    // Get weak topics
+    const weakTopics = await db
+      .select()
+      .from(schema.weakTopics)
+      .where(and(
+        eq(schema.weakTopics.userId, studentId),
+        eq(schema.weakTopics.isResolved, false)
+      ))
+      .orderBy(desc(schema.weakTopics.incorrectCount))
+      .limit(10);
 
     res.json({
       success: true,
       data: {
-        ...student,
-        stats: detailedStats,
+        student: {
+          id: student.id,
+          name: student.name,
+          email: student.email,
+          avatarUrl: student.avatarUrl,
+          lastLogin: student.lastLogin,
+          createdAt: student.createdAt,
+        },
+        subjects: studentSubjects,
+        recentQuizzes: quizResults.map(r => ({
+          id: r.quiz_results.id,
+          quizTitle: r.quizzes.title,
+          score: r.quiz_results.score,
+          total: r.quiz_results.totalQuestions,
+          percentage: r.quiz_results.percentage,
+          date: r.quiz_results.createdAt,
+        })),
+        weakTopics: weakTopics.map(t => ({
+          id: t.id,
+          topicName: t.topicName,
+          incorrectCount: t.incorrectCount,
+          lastIncorrect: t.lastIncorrect,
+        })),
       },
     });
   } catch (error) {
+    console.error('Get student details error:', error);
     next(error);
   }
 });
@@ -64,266 +194,121 @@ router.get('/student/:studentId', async (req, res, next) => {
 /**
  * GET /api/teacher/analytics - Get class-wide analytics
  */
-router.get('/analytics', async (req, res, next) => {
+router.get('/analytics', requireTeacher, async (req, res, next) => {
   try {
-    const teacherId = req.query.teacherId || 'teacher-1';
-    const studentIds = enrollmentsStore.get(teacherId) || [];
+    // Total students
+    const [studentsResult] = await db
+      .select({ count: count() })
+      .from(schema.users)
+      .where(eq(schema.users.role, 'student'));
+
+    // Active students (logged in last 7 days)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     
-    // Aggregate analytics across all students
-    const analytics = {
-      totalStudents: studentIds.length,
-      activeStudents: 0,
-      averageProgress: 0,
-      totalQuizzes: 0,
-      averageScore: 0,
-      weakTopics: [],
-      strongTopics: [],
-      subjectDistribution: {},
-      engagementTrend: [],
-    };
+    const [activeResult] = await db
+      .select({ count: count() })
+      .from(schema.users)
+      .where(and(
+        eq(schema.users.role, 'student'),
+        gt(schema.users.lastLogin, sevenDaysAgo)
+      ));
 
-    let totalProgress = 0;
-    let totalQuizScore = 0;
-    let totalQuizCount = 0;
-    const topicScores = new Map(); // topic -> [scores]
-    const subjectCounts = new Map();
+    // Average quiz score across all students
+    const [avgScoreResult] = await db
+      .select({ avgScore: avg(schema.quizResults.percentage) })
+      .from(schema.quizResults)
+      .innerJoin(schema.users, eq(schema.quizResults.userId, schema.users.id))
+      .where(eq(schema.users.role, 'student'));
 
-    for (const studentId of studentIds) {
-      const progress = progressData.get(studentId) || {};
-      const student = studentsStore.get(studentId);
-      
-      // Activity check (studied in last 7 days)
-      if (student?.lastActive && isRecentlyActive(student.lastActive)) {
-        analytics.activeStudents++;
-      }
-
-      // Progress metrics
-      if (progress.subjects) {
-        totalProgress += calculateProgressPercentage(progress.subjects);
-        
-        // Subject distribution
-        Object.keys(progress.subjects).forEach(subject => {
-          subjectCounts.set(subject, (subjectCounts.get(subject) || 0) + 1);
-        });
-      }
-
-      // Quiz scores
-      if (progress.quizzes) {
-        progress.quizzes.forEach(quiz => {
-          totalQuizCount++;
-          totalQuizScore += quiz.score;
-          
-          // Track topic performance
-          if (quiz.topic) {
-            if (!topicScores.has(quiz.topic)) {
-              topicScores.set(quiz.topic, []);
-            }
-            topicScores.get(quiz.topic).push(quiz.score);
-          }
-        });
-      }
-    }
-
-    // Calculate averages
-    if (studentIds.length > 0) {
-      analytics.averageProgress = Math.round(totalProgress / studentIds.length);
-    }
-    
-    if (totalQuizCount > 0) {
-      analytics.averageScore = Math.round(totalQuizScore / totalQuizCount);
-      analytics.totalQuizzes = totalQuizCount;
-    }
-
-    // Identify weak and strong topics
-    const topicPerformance = [];
-    for (const [topic, scores] of topicScores.entries()) {
-      const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
-      topicPerformance.push({ topic, avgScore, attempts: scores.length });
-    }
-    
-    topicPerformance.sort((a, b) => a.avgScore - b.avgScore);
-    analytics.weakTopics = topicPerformance.slice(0, 5);
-    analytics.strongTopics = topicPerformance.slice(-5).reverse();
+    // Total quizzes completed
+    const [quizzesResult] = await db
+      .select({ count: count() })
+      .from(schema.quizResults)
+      .innerJoin(schema.users, eq(schema.quizResults.userId, schema.users.id))
+      .where(eq(schema.users.role, 'student'));
 
     // Subject distribution
-    analytics.subjectDistribution = Object.fromEntries(subjectCounts);
-
-    res.json({ success: true, data: analytics });
-  } catch (error) {
-    next(error);
-  }
-});
-
-/**
- * POST /api/teacher/enroll - Enroll a student (for testing)
- */
-router.post('/enroll', async (req, res, next) => {
-  try {
-    const { teacherId = 'teacher-1', studentId, studentName, studentEmail } = req.body;
-    
-    // Create/update student
-    studentsStore.set(studentId, {
-      id: studentId,
-      name: studentName,
-      email: studentEmail,
-      enrolledAt: new Date().toISOString(),
-      lastActive: new Date().toISOString(),
-    });
-
-    // Add to teacher's enrollment
-    if (!enrollmentsStore.has(teacherId)) {
-      enrollmentsStore.set(teacherId, []);
-    }
-    const students = enrollmentsStore.get(teacherId);
-    if (!students.includes(studentId)) {
-      students.push(studentId);
-    }
-
-    console.log(`✅ Enrolled student ${studentName} (${studentId}) with teacher ${teacherId}`);
+    const subjects = await db
+      .select({
+        name: schema.subjects.name,
+        count: count(),
+      })
+      .from(schema.subjects)
+      .innerJoin(schema.users, eq(schema.subjects.userId, schema.users.id))
+      .where(eq(schema.users.role, 'student'))
+      .groupBy(schema.subjects.name)
+      .orderBy(desc(count()))
+      .limit(10);
 
     res.json({
       success: true,
-      message: 'Student enrolled successfully',
-      data: { studentId, teacherId },
+      data: {
+        totalStudents: Number(studentsResult?.count || 0),
+        activeStudents: Number(activeResult?.count || 0),
+        averageScore: Math.round(Number(avgScoreResult?.avgScore || 0)),
+        totalQuizzes: Number(quizzesResult?.count || 0),
+        subjectDistribution: subjects.map(s => ({
+          name: s.name,
+          studentCount: Number(s.count),
+        })),
+      },
     });
   } catch (error) {
+    console.error('Get teacher analytics error:', error);
     next(error);
   }
 });
 
 /**
- * POST /api/teacher/update-progress - Update student progress (called by student app)
+ * POST /api/teacher/create-subject - Create a subject for all students
  */
-router.post('/update-progress', async (req, res, next) => {
+router.post('/create-subject', requireTeacher, async (req, res, next) => {
   try {
-    const { studentId, type, data } = req.body;
-    
-    if (!progressData.has(studentId)) {
-      progressData.set(studentId, {
-        subjects: {},
-        quizzes: [],
-        studyTime: 0,
-        lastUpdated: new Date().toISOString(),
-      });
+    const { name, description, color, icon } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ error: { message: 'Subject name is required' } });
     }
 
-    const progress = progressData.get(studentId);
+    // Get all students
+    const students = await db
+      .select({ id: schema.users.id })
+      .from(schema.users)
+      .where(eq(schema.users.role, 'student'));
 
-    if (type === 'quiz') {
-      progress.quizzes.push({
-        ...data,
-        timestamp: new Date().toISOString(),
-      });
-    } else if (type === 'subject') {
-      progress.subjects[data.subjectId] = {
-        ...(progress.subjects[data.subjectId] || {}),
-        ...data,
-        lastStudied: new Date().toISOString(),
-      };
-    } else if (type === 'study-time') {
-      progress.studyTime += data.minutes || 0;
+    if (students.length === 0) {
+      return res.status(400).json({ error: { message: 'No students found' } });
     }
 
-    progress.lastUpdated = new Date().toISOString();
+    // Create subject for each student
+    const subjectsToCreate = students.map(student => ({
+      userId: student.id,
+      name: name,
+      description: description || '',
+      color: color || '#3B82F6',
+      icon: icon || '📚',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }));
 
-    // Update student last active
-    const student = studentsStore.get(studentId);
-    if (student) {
-      student.lastActive = new Date().toISOString();
-    }
+    const createdSubjects = await db
+      .insert(schema.subjects)
+      .values(subjectsToCreate)
+      .returning();
 
-    res.json({ success: true, message: 'Progress updated' });
+    res.json({
+      success: true,
+      message: `Subject "${name}" created for ${students.length} students`,
+      data: {
+        studentsCount: students.length,
+        subjectsCreated: createdSubjects.length,
+      },
+    });
   } catch (error) {
+    console.error('Create subject for all students error:', error);
     next(error);
   }
 });
-
-// Helper functions
-function calculateStudentStats(studentId, progress) {
-  const quizzes = progress.quizzes || [];
-  const subjects = Object.keys(progress.subjects || {}).length;
-  
-  let totalScore = 0;
-  let quizCount = 0;
-  
-  quizzes.forEach(q => {
-    totalScore += q.score || 0;
-    quizCount++;
-  });
-
-  return {
-    subjects,
-    quizzesTaken: quizCount,
-    averageScore: quizCount > 0 ? Math.round(totalScore / quizCount) : 0,
-    studyTime: progress.studyTime || 0,
-    lastActive: progress.lastUpdated || null,
-  };
-}
-
-function calculateDetailedStats(studentId, progress) {
-  const stats = calculateStudentStats(studentId, progress);
-  
-  // Add detailed breakdown
-  stats.subjectProgress = Object.entries(progress.subjects || {}).map(([id, data]) => ({
-    subjectId: id,
-    subjectName: data.name || id,
-    topicsCompleted: data.topicsCompleted || 0,
-    totalTopics: data.totalTopics || 0,
-    lastStudied: data.lastStudied,
-  }));
-
-  // Recent quizzes
-  stats.recentQuizzes = (progress.quizzes || [])
-    .slice(-10)
-    .reverse()
-    .map(q => ({
-      topic: q.topic,
-      score: q.score,
-      timestamp: q.timestamp,
-    }));
-
-  // Weak topics for this student
-  const topicScores = new Map();
-  (progress.quizzes || []).forEach(quiz => {
-    if (quiz.topic) {
-      if (!topicScores.has(quiz.topic)) {
-        topicScores.set(quiz.topic, []);
-      }
-      topicScores.get(quiz.topic).push(quiz.score);
-    }
-  });
-
-  stats.weakTopics = Array.from(topicScores.entries())
-    .map(([topic, scores]) => ({
-      topic,
-      avgScore: Math.round(scores.reduce((a, b) => a + b, 0) / scores.length),
-      attempts: scores.length,
-    }))
-    .filter(t => t.avgScore < 70)
-    .sort((a, b) => a.avgScore - b.avgScore)
-    .slice(0, 5);
-
-  return stats;
-}
-
-function calculateProgressPercentage(subjects) {
-  let total = 0;
-  let count = 0;
-  
-  Object.values(subjects).forEach(subject => {
-    if (subject.totalTopics > 0) {
-      total += (subject.topicsCompleted / subject.totalTopics) * 100;
-      count++;
-    }
-  });
-
-  return count > 0 ? total / count : 0;
-}
-
-function isRecentlyActive(lastActiveDate) {
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  return new Date(lastActiveDate) > sevenDaysAgo;
-}
 
 export default router;

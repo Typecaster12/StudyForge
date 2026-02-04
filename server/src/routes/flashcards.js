@@ -126,9 +126,9 @@ router.post('/decks', async (req, res, next) => {
     if (cards && Array.isArray(cards) && cards.length > 0) {
       const cardsToInsert = cards.map(card => ({
         deckId: newDeck.id,
-        front: card.front || card.question,
-        back: card.back || card.answer,
-        hint: card.hint,
+        front: card.front || card.term || card.question,
+        back: card.back || card.definition || card.answer,
+        hint: card.hint || card.example,
         difficulty: card.difficulty || 'medium',
       }));
 

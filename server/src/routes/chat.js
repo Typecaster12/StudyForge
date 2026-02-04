@@ -82,7 +82,7 @@ ANSWER:`;
   } else if (AI_PROVIDER === 'groq') {
     const completion = await groqClient.chat.completions.create({
       messages: [{ role: 'user', content: prompt }],
-      model: 'llama-3.3-70b-versatile',
+      model: 'groq/compound',
       temperature: 0.7,
       max_completion_tokens: 2048,
     });
