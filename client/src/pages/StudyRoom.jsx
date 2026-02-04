@@ -72,7 +72,6 @@ export default function StudyRoom() {
     if (initialized && !loading && !isLoading) {
       const subject = subjects.find(s => s.id === id)
       if (!subject && !currentSubject) {
-        console.warn('Subject not found, redirecting to dashboard')
         navigate('/dashboard')
       }
     }

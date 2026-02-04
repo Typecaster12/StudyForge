@@ -1,8 +1,8 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Sparkles, Plus, Trash2, GraduationCap, 
+import {
+  Sparkles, Plus, Trash2, GraduationCap,
   BarChart3, Target, Layers, ArrowRight, X,
   Upload, Settings as SettingsIcon, LogOut, Crown, RefreshCw, PieChart
 } from 'lucide-react';
@@ -51,7 +51,7 @@ export default function Dashboard() {
 
   const handleAddSubject = () => {
     if (!newSubjectName.trim()) return
-    
+
     const newSubject = {
       name: newSubjectName.trim(),
       emoji: newSubjectEmoji,
@@ -59,7 +59,7 @@ export default function Dashboard() {
       content: `Study material for ${newSubjectName}`,
       topics: []
     }
-    
+
     addSubject(newSubject)
     setNewSubjectName('')
     setNewSubjectEmoji('📚')
@@ -147,7 +147,7 @@ export default function Dashboard() {
 
       <main className="relative max-w-7xl mx-auto px-6 lg:px-8 py-12">
         {/* Welcome */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
@@ -156,14 +156,14 @@ export default function Dashboard() {
             {activeTab === 'subjects' ? 'Your Subjects 📚' : 'Analytics & Progress 📊'}
           </h1>
           <p className="text-gray-400 text-lg">
-            {activeTab === 'subjects' 
+            {activeTab === 'subjects'
               ? 'Select a subject to study topics, take quizzes, or review flashcards.'
               : 'Track your learning progress, identify weak areas, and improve your study habits.'}
           </p>
         </motion.div>
 
         {/* Tab Switcher */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
@@ -210,7 +210,7 @@ export default function Dashboard() {
         {activeTab === 'subjects' && (
           <>
             {/* Stats */}
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
@@ -231,7 +231,7 @@ export default function Dashboard() {
             </motion.div>
 
             {/* Subjects Grid */}
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
@@ -241,71 +241,74 @@ export default function Dashboard() {
                 <span className="text-sm text-gray-500">{subjects.length} subjects</span>
               </div>
 
-          {subjects.length === 0 ? (
-            <div className="card p-16 text-center">
-              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 flex items-center justify-center mx-auto mb-6">
-                <GraduationCap className="w-9 h-9 text-blue-400" />
-              </div>
-              <h3 className="text-2xl font-bold text-white mb-3">No subjects yet</h3>
-              <p className="text-gray-400 mb-8 max-w-md mx-auto">
-                Add your first subject to start studying. Create custom subjects or try our demos.
-              </p>
-              <button onClick={() => setShowModal(true)} className="btn btn-primary shimmer-button">
-                <Plus className="w-5 h-5" />
-                Add Your First Subject
-              </button>
-            </div>
-          ) : (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {subjects.map((subject) => (
-                <motion.div
-                  key={subject.id}
-                  layout
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  onClick={() => handleOpenSubject(subject)}
-                  className="card card-hover p-6 cursor-pointer group relative"
-                >
-                  <div className={cn(
-                    "w-14 h-14 rounded-2xl bg-gradient-to-br flex items-center justify-center text-2xl mb-4",
-                    subject.gradient || 'from-blue-500 to-blue-600'
-                  )}>
-                    {subject.emoji || '📚'}
+              {subjects.length === 0 ? (
+                <div className="card p-16 text-center">
+                  <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 flex items-center justify-center mx-auto mb-6">
+                    <GraduationCap className="w-9 h-9 text-blue-400" />
                   </div>
-                  <h3 className="text-lg font-semibold text-white mb-2 group-hover:text-blue-300 transition-colors">
-                    {subject.name}
-                  </h3>
-                  <p className="text-sm text-gray-500 mb-4">
-                    {subject.topics?.length || 0} topics
+                  <h3 className="text-2xl font-bold text-white mb-3">No subjects yet</h3>
+                  <p className="text-gray-400 mb-8 max-w-md mx-auto">
+                    Add your first subject to start studying. Create custom subjects or try our demos.
                   </p>
-                  <div className="flex items-center gap-1 text-blue-400 text-sm font-medium">
-                    <span>Study Now</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </div>
-
-                  <button
-                    onClick={(e) => { e.stopPropagation(); removeSubject(subject.id) }}
-                    className="absolute top-4 right-4 p-2 rounded-lg bg-red-500/10 text-red-400 opacity-0 group-hover:opacity-100 hover:bg-red-500/20 transition-all"
-                  >
-                    <Trash2 className="w-4 h-4" />
+                  <button onClick={() => setShowModal(true)} className="btn btn-primary shimmer-button">
+                    <Plus className="w-5 h-5" />
+                    Add Your First Subject
                   </button>
-                </motion.div>
-              ))}
-
-              {/* Add New Card */}
-              <button
-                onClick={() => setShowModal(true)}
-                className="card p-6 border-2 border-dashed border-gray-700 hover:border-blue-500/50 flex flex-col items-center justify-center min-h-[200px] group transition-colors"
-              >
-                <div className="w-14 h-14 rounded-2xl bg-gray-800 flex items-center justify-center text-gray-500 group-hover:bg-blue-500/20 group-hover:text-blue-400 transition-all mb-4">
-                  <Plus className="w-6 h-6" />
                 </div>
-                <span className="text-gray-500 group-hover:text-gray-300 font-medium">Add Subject</span>
-              </button>
-            </div>
-          )}
-        </motion.div>
+              ) : (
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {/* Filter duplicates by ID to prevent React key warnings */}
+                  {subjects.filter((subject, index, self) =>
+                    index === self.findIndex(s => s.id === subject.id)
+                  ).map((subject) => (
+                    <motion.div
+                      key={subject.id}
+                      layout
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.9 }}
+                      onClick={() => handleOpenSubject(subject)}
+                      className="card card-hover p-6 cursor-pointer group relative"
+                    >
+                      <div className={cn(
+                        "w-14 h-14 rounded-2xl bg-gradient-to-br flex items-center justify-center text-2xl mb-4",
+                        subject.gradient || 'from-blue-500 to-blue-600'
+                      )}>
+                        {subject.emoji || '📚'}
+                      </div>
+                      <h3 className="text-lg font-semibold text-white mb-2 group-hover:text-blue-300 transition-colors">
+                        {subject.name}
+                      </h3>
+                      <p className="text-sm text-gray-500 mb-4">
+                        {subject.topics?.length || 0} topics
+                      </p>
+                      <div className="flex items-center gap-1 text-blue-400 text-sm font-medium">
+                        <span>Study Now</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </div>
+
+                      <button
+                        onClick={(e) => { e.stopPropagation(); removeSubject(subject.id) }}
+                        className="absolute top-4 right-4 p-2 rounded-lg bg-red-500/10 text-red-400 opacity-0 group-hover:opacity-100 hover:bg-red-500/20 transition-all"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </motion.div>
+                  ))}
+
+                  {/* Add New Card */}
+                  <button
+                    onClick={() => setShowModal(true)}
+                    className="card p-6 border-2 border-dashed border-gray-700 hover:border-blue-500/50 flex flex-col items-center justify-center min-h-[200px] group transition-colors"
+                  >
+                    <div className="w-14 h-14 rounded-2xl bg-gray-800 flex items-center justify-center text-gray-500 group-hover:bg-blue-500/20 group-hover:text-blue-400 transition-all mb-4">
+                      <Plus className="w-6 h-6" />
+                    </div>
+                    <span className="text-gray-500 group-hover:text-gray-300 font-medium">Add Subject</span>
+                  </button>
+                </div>
+              )}
+            </motion.div>
           </>
         )}
       </main>
@@ -313,14 +316,14 @@ export default function Dashboard() {
       {/* Modal */}
       <AnimatePresence>
         {showModal && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
           >
             <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowModal(false)} />
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -361,11 +364,11 @@ export default function Dashboard() {
 
               {/* Upload PDF */}
               {modalTab === 'upload' && (
-                <PDFUpload 
+                <PDFUpload
                   onUploadComplete={(subject) => {
                     setShowModal(false);
                     navigate(`/subject/${subject.id}`);
-                  }} 
+                  }}
                 />
               )}
 
@@ -399,7 +402,7 @@ export default function Dashboard() {
           </motion.div>
         )}
       </AnimatePresence>
-      
+
       {/* Teacher Upgrade Modal */}
       <TeacherUpgradeModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} />
     </div>
